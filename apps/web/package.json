@@ -1,0 +1,24 @@
+{
+  "name": "@leitesol/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "vite --host 0.0.0.0 --port 3000 --strictPort",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "preview": "vite preview --host 0.0.0.0 --port 3000 --strictPort",
+    "test": "node --eval \"console.log('No tests for web yet')\""
+  },
+  "dependencies": {
+    "@leitesol/contracts": "file:../../packages/contracts",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.3.4"
+  }
+}

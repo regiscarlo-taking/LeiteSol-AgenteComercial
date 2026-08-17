@@ -1,0 +1,4 @@
+packages:
+  - "apps/gateway"
+  - "apps/web"
+  - "packages/*"

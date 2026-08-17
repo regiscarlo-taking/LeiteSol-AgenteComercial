@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    environment:
+      PORT: 5000
+      LEITESOL_API_ENVIRONMENT: development
+      LEITESOL_API_ALLOWED_HOSTS: api,localhost,127.0.0.1
+      LEITESOL_API_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
+    volumes:
+      - ./apps/api:/app/apps/api
+    ports:
+      - "5000:5000"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      target: dev
+    environment:
+      PORT: 3001
+      BACKEND_URL: http://api:5000
+      CORS_ORIGINS: http://localhost:3000
+    volumes:
+      - ./apps/gateway:/app/apps/gateway
+      - ./packages:/app/packages
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    environment:
+      PORT: 3000
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+    ports:
+      - "3000:3000"

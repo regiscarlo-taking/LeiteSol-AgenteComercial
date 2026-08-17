@@ -1,0 +1,9 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python.defaultInterpreterPath": "C:\\Python312\\python.exe",
+    "python.analysis.extraPaths": [
+        "apps/api/src",
+        "apps/api/.python_packages",
+        "apps/agent/src"
+    ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "leitesol-agente-comercial",
+  "private": true,
+  "workspaces": [
+    "apps/gateway",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "concurrently \"npm run dev:contracts\" \"npm run dev:gateway\" \"npm run dev:web\"",
+    "dev:full": "concurrently \"npm run dev:contracts\" \"npm run dev:gateway\" \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:api": "node scripts/run-api.mjs --reload --port 5000",
+    "dev:agent": "uv run --package leitesol-agent python -m leitesol_agent.main",
+    "dev:contracts": "npm run dev --workspace @leitesol/contracts",
+    "dev:web": "npm run dev --workspace @leitesol/web",
+    "dev:gateway": "npm run dev --workspace @leitesol/gateway",
+    "lint": "turbo run lint",
+    "lint:py": "uv run ruff check apps/api/src apps/agent/src apps/api/tests apps/agent/tests",
+    "postinstall": "npm run build --workspace @leitesol/contracts",
+    "start:api": "node scripts/run-api.mjs --port 5000",
+    "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:prod": "docker compose up --build",
+    "test": "turbo run test",
+    "test:py": "uv run pytest"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "turbo": "^2.0.12",
+    "typescript": "^5.5.4"
+  }
+}

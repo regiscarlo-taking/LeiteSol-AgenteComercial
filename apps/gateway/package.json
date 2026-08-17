@@ -1,0 +1,24 @@
+{
+  "name": "@leitesol/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "node --eval \"console.log('No tests for gateway yet')\""
+  },
+  "dependencies": {
+    "@leitesol/contracts": "file:../../packages/contracts",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.16.2"
+  }
+}

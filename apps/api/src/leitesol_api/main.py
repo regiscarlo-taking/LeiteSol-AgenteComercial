@@ -1,0 +1,54 @@
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+from leitesol_api.infrastructure.logging import configure_logging
+from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.interfaces.http.middlewares.healthcheck import HealthcheckMiddleware
+from leitesol_api.interfaces.http.middlewares.logging import LoggingMiddleware
+from leitesol_api.interfaces.http.middlewares.security import ApiKeyMiddleware, SecurityHeadersMiddleware
+from leitesol_api.interfaces.http.routes.health import router as health_router
+from leitesol_api.interfaces.responses import build_response_payload
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging()
+
+    app = FastAPI(
+        title="LeiteSol API",
+        version="0.1.0",
+        docs_url="/docs" if settings.environment != "production" else None,
+        redoc_url="/redoc" if settings.environment != "production" else None,
+    )
+
+    app.add_middleware(HealthcheckMiddleware)
+    app.add_middleware(LoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(ApiKeyMiddleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        payload = build_response_payload(
+            data=None,
+            message="Unexpected internal error.",
+            error=str(exc) if settings.environment != "production" else "Internal server error.",
+            status_code=500,
+            trace_id=getattr(request.state, "request_id", None),
+        )
+        return JSONResponse(status_code=500, content=payload)
+
+    app.include_router(health_router)
+    return app
+
+
+app = create_app()
