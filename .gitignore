@@ -4,6 +4,7 @@ dist/
 coverage/
 __pycache__/
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
 .mypy_cache/
 .hypothesis/
@@ -13,6 +14,7 @@ __pycache__/
 venv/
 .python_packages/
 .tmp/
+.temp/
 .python-version
 .coverage
 .coverage.*
