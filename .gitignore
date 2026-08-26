@@ -26,6 +26,11 @@ pip-wheel-metadata/
 *.pyc
 *.pyo
 *.pyd
+*.log
+*.tmp
+*.temp
+*.swp
+.DS_Store
 .env
 .env.local
 pnpm-lock.yaml
