@@ -33,3 +33,19 @@ class HealthStatusResponse(BaseModel):
     service: str
     status: str
     version: str
+
+
+class MeasureResponse(BaseModel):
+    measure_id: str = Field(alias="measureId")
+    friendly_name: str = Field(alias="friendlyName")
+    dax_name: str = Field(alias="daxName")
+    measure_type: str | None = Field(default=None, alias="type")
+    unit: str | None = None
+    functional_rule: str | None = Field(default=None, alias="functionalRule")
+    dax_expression: str | None = Field(default=None, alias="daxExpression")
+    base_object: str | None = Field(default=None, alias="baseObject")
+    dependencies: str | None = None
+    bi_source: str | None = Field(default=None, alias="biSource")
+    agent_visible: str | None = Field(default=None, alias="agentVisible")
+
+    model_config = ConfigDict(populate_by_name=True)

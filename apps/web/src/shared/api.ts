@@ -1,4 +1,4 @@
-import type { BaseResponse, HealthStatus } from "@leitesol/contracts";
+import type { BaseResponse, HealthStatus, Measure } from "@leitesol/contracts";
 import type {
   ChatAttachment,
   ChatConversation,
@@ -19,6 +19,12 @@ export const getBackendHealth = async (): Promise<BaseResponse<HealthStatus>> =>
   requestApi<HealthStatus>({
     url: "/api/health",
     errorMessage: "Nao foi possivel consultar a saude do backend.",
+  });
+
+export const listMeasures = async (): Promise<BaseResponse<Measure[]>> =>
+  requestApi<Measure[]>({
+    url: "/api/fabric/measures",
+    errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
   });
 
 export const listChats = async (): Promise<BaseResponse<ChatConversationSummary[]>> =>

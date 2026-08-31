@@ -27,6 +27,20 @@ export interface HealthStatus {
   version: string;
 }
 
+export interface Measure {
+  measureId: string;
+  friendlyName: string;
+  daxName: string;
+  type: string | null;
+  unit: string | null;
+  functionalRule: string | null;
+  daxExpression: string | null;
+  baseObject: string | null;
+  dependencies: string | null;
+  biSource: string | null;
+  agentVisible: string | null;
+}
+
 export interface ChatAttachment {
   id: string;
   name: string;

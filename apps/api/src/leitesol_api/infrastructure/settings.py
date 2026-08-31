@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://localhost:3001"
     allowed_hosts: str = "localhost,127.0.0.1,api,testserver"
     api_key: str = ""
+    fabric_powerbi_url: str = ""
+    fabric_workspace_id: str = ""
+    fabric_warehouse_id: str = ""
+    fabric_server: str = ""
+    fabric_database: str = "AgenteFaturamentoDW"
+    entra_tenant_id: str = ""
+    entra_client_id: str = ""
+    entra_client_secret: str = ""
+    fabric_driver: str = "ODBC Driver 18 for SQL Server"
+    fabric_connection_timeout: int = 10
 
     @property
     def cors_origins(self) -> list[str]:
@@ -20,7 +30,11 @@ class Settings(BaseSettings):
     def trusted_hosts(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
 
-    model_config = SettingsConfigDict(env_prefix="LEITESOL_API_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="LEITESOL_API_",
+        extra="ignore",
+    )
 
 
 @lru_cache

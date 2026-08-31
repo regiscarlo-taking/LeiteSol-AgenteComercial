@@ -7,6 +7,7 @@ import { healthcheckMiddleware } from "./middlewares/healthcheck.js";
 import { loggingMiddleware } from "./middlewares/logging.js";
 import { securityHeadersMiddleware } from "./middlewares/security.js";
 import { chatsRouter } from "./routes/chats.js";
+import { fabricRouter } from "./routes/fabric.js";
 import { healthRouter } from "./routes/health.js";
 import { createBaseResponse } from "./shared/contracts.js";
 
@@ -27,6 +28,7 @@ export const createApp = () => {
 
   app.use("/api", healthRouter);
   app.use("/api", chatsRouter);
+  app.use("/api", fabricRouter);
 
   app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
     response.status(502).json(

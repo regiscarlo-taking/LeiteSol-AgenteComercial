@@ -9,6 +9,7 @@ from leitesol_api.interfaces.http.middlewares.healthcheck import HealthcheckMidd
 from leitesol_api.interfaces.http.middlewares.logging import LoggingMiddleware
 from leitesol_api.interfaces.http.middlewares.security import ApiKeyMiddleware, SecurityHeadersMiddleware
 from leitesol_api.interfaces.http.routes.health import router as health_router
+from leitesol_api.interfaces.http.routes.measures import router as measures_router
 from leitesol_api.interfaces.responses import build_response_payload
 
 
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=payload)
 
     app.include_router(health_router)
+    app.include_router(measures_router)
     return app
 
 
