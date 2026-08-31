@@ -44,6 +44,30 @@ export const createBaseRequest = <
 
 const canSendBody = (method: HttpMethod): boolean => method !== "GET";
 
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const executeWithRetry = async <T>(
+  operation: () => Promise<T>,
+  retries = 3,
+  baseDelayMs = 250,
+): Promise<T> => {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= retries) {
+        throw error;
+      }
+
+      const delayMs = baseDelayMs * 2 ** attempt;
+      await wait(delayMs);
+      attempt += 1;
+    }
+  }
+};
+
 export const requestApi = async <
   TResponseData,
   TRequestData = unknown,
@@ -59,34 +83,36 @@ export const requestApi = async <
 }: ApiRequestOptions<TResponseData, TRequestData, TRequestMetadata, TResponseMetadata>): Promise<
   BaseResponse<TResponseData, TResponseMetadata>
 > => {
-  const baseRequest = createBaseRequest<TRequestData, TRequestMetadata>({
-    data,
-    metadata,
+  return executeWithRetry(async () => {
+    const baseRequest = createBaseRequest<TRequestData, TRequestMetadata>({
+      data,
+      metadata,
+    });
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "X-Request-ID": baseRequest.traceId ?? "",
+        ...(canSendBody(method) ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: canSendBody(method) ? JSON.stringify(baseRequest) : undefined,
+    });
+
+    const payload = (await response.json().catch(() => null)) as BaseResponse<
+      TResponseData,
+      TResponseMetadata
+    > | null;
+
+    if (!payload) {
+      throw new Error(`${errorMessage} A resposta recebida nao segue o contrato esperado.`);
+    }
+
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.error ?? payload.message ?? errorMessage);
+    }
+
+    return payload;
   });
-
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Accept: "application/json",
-      "X-Request-ID": baseRequest.traceId ?? "",
-      ...(canSendBody(method) ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    body: canSendBody(method) ? JSON.stringify(baseRequest) : undefined,
-  });
-
-  const payload = (await response.json().catch(() => null)) as BaseResponse<
-    TResponseData,
-    TResponseMetadata
-  > | null;
-
-  if (!payload) {
-    throw new Error(`${errorMessage} A resposta recebida nao segue o contrato esperado.`);
-  }
-
-  if (!response.ok || !payload.success) {
-    throw new Error(payload.error ?? payload.message ?? errorMessage);
-  }
-
-  return payload;
 };
