@@ -23,9 +23,15 @@ class Settings(BaseSettings):
     entra_client_secret: str = ""
     fabric_driver: str = "ODBC Driver 18 for SQL Server"
     fabric_connection_timeout: int = 10
-    jwt_secret_key: str = "your-secret-key-change-in-production"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
+    jwt_refresh_expiration_hours: int = 168  # 7 dias
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.environment == "production" and not self.jwt_secret_key:
+            raise ValueError("jwt_secret_key must be set in production environment")
 
     @property
     def cors_origins(self) -> list[str]:

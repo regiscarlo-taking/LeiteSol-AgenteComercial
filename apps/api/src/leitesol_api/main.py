@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from leitesol_api.infrastructure.logging import configure_logging
@@ -9,10 +10,21 @@ from leitesol_api.infrastructure.settings import get_settings
 from leitesol_api.interfaces.http.middlewares.healthcheck import HealthcheckMiddleware
 from leitesol_api.interfaces.http.middlewares.logging import LoggingMiddleware
 from leitesol_api.interfaces.http.middlewares.security import ApiKeyMiddleware, SecurityHeadersMiddleware
-from leitesol_api.interfaces.http.routes.auth import router as auth_router
+from leitesol_api.interfaces.http.routes.auth import router as auth_router, limiter
 from leitesol_api.interfaces.http.routes.health import router as health_router
 from leitesol_api.interfaces.http.routes.measures import router as measures_router
 from leitesol_api.interfaces.responses import build_response_payload
+
+
+async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handler customizado para rate limit exceeded."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Rate limit exceeded. Maximum 5 requests per minute.",
+            "error": "TooManyRequests",
+        },
+    )
 
 
 def create_app() -> FastAPI:
@@ -30,6 +42,10 @@ def create_app() -> FastAPI:
             "usePkceWithAuthorizationCodeGrant": False,
         },
     )
+    
+    # Registrar rate limiter
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
     app.add_middleware(HealthcheckMiddleware)
     app.add_middleware(LoggingMiddleware)

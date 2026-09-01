@@ -6,3 +6,4 @@ azure-identity>=1.17.0,<2.0.0
 PyJWT>=2.8.0,<3.0.0
 passlib[bcrypt]>=1.7.4,<2.0.0
 python-multipart>=0.0.6,<1.0.0
+slowapi>=0.1.8,<1.0.0
