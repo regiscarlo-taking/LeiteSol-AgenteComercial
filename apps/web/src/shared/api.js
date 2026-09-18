@@ -1,4 +1,15 @@
 import { requestApi } from "./http";
+export const authenticate = async (username, password) => {
+    const response = await fetch("/api/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) {
+        throw new Error("Usuário ou senha inválidos.");
+    }
+    return (await response.json());
+};
 export const getGatewayHealth = async () => requestApi({
     url: "/health/live",
     errorMessage: "Nao foi possivel consultar a saude do gateway.",
@@ -9,6 +20,9 @@ export const getBackendHealth = async () => requestApi({
 });
 export const listMeasures = async () => requestApi({
     url: "/api/fabric/measures",
+    headers: {
+        Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
 });
 export const listChats = async () => requestApi({

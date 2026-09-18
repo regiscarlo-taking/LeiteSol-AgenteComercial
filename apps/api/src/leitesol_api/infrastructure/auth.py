@@ -2,15 +2,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from leitesol_api.infrastructure.settings import get_settings
-
-# Context para hashing de passwords
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme - integra automaticamente com o Swagger
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -92,10 +89,10 @@ def verify_token(token: str = Depends(oauth2_scheme)) -> TokenData:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        username: str = payload.get("sub")
-        token_type: str = payload.get("type", "access")
+        username = payload.get("sub")
+        token_type = payload.get("type", "access")
         
-        if username is None:
+        if not isinstance(username, str) or not isinstance(token_type, str):
             raise credentials_exception
         
         # Rejeitar refresh tokens em endpoints que esperam access tokens
@@ -125,5 +122,9 @@ def authenticate_user(username: str, password: str) -> bool:
     if username != settings.basic_auth_username:
         return False
     
-    # Usar timing-safe comparison com bcrypt
-    return pwd_context.verify(password, settings.basic_auth_password)
+    # Usar comparação segura com bcrypt.
+    password_hash = settings.basic_auth_password.replace("$$", "$")
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except ValueError:
+        return False

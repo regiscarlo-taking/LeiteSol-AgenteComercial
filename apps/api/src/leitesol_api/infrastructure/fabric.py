@@ -1,9 +1,10 @@
 from collections.abc import Mapping
-import struct
+import logging
 from typing import Any
 
 from leitesol_api.domain.measure import Measure
-from leitesol_api.infrastructure.entra_id import AccessTokenProvider
+
+logger = logging.getLogger("leitesol.api.fabric")
 
 
 class FabricConnectionError(RuntimeError):
@@ -17,38 +18,46 @@ class FabricSqlConnection:
         server: str,
         database: str,
         driver: str,
+        authentication: str,
+        client_id: str,
+        tenant_id: str,
+        client_secret: str,
         timeout: int,
-        access_token_provider: AccessTokenProvider,
     ) -> None:
         self._server = server
         self._database = database
         self._driver = driver
+        self._authentication = authentication
+        self._client_id = client_id
+        self._tenant_id = tenant_id
+        # O compose usa $$ para preservar cifrões no .env; normalize antes do ODBC.
+        self._client_secret = client_secret.replace("$$", "$")
         self._timeout = timeout
-        self._access_token_provider = access_token_provider
 
     def _connection_string(self) -> str:
         return (
             f"DRIVER={{{self._driver}}};"
             f"SERVER={self._server};"
             f"DATABASE={self._database};"
+            f"Authentication={self._authentication};"
+            f"UID={self._client_id}@{self._tenant_id};"
+            f"PWD={self._client_secret};"
             "Encrypt=yes;TrustServerCertificate=no;"
         )
-
-    def _access_token_attributes(self) -> dict[int, bytes]:
-        token = self._access_token_provider.get_token().encode("utf-16-le")
-        return {1256: struct.pack(f"<I{len(token)}s", len(token), token)}
 
     def list_top(self, limit: int = 100) -> list[Measure]:
         limit = min(max(limit, 1), 100)
         try:
             import pyodbc
 
-            connection = pyodbc.connect(
-                self._connection_string(),
-                attrs_before=self._access_token_attributes(),
-                timeout=self._timeout,
-            )
+            connection = pyodbc.connect(self._connection_string(), timeout=self._timeout)
         except Exception as error:
+            logger.exception(
+                "Fabric connection failed server=%s database=%s driver=%s",
+                self._server,
+                self._database,
+                self._driver,
+            )
             raise FabricConnectionError("Unable to connect to the Fabric warehouse.") from error
 
         query = f"""
@@ -66,6 +75,10 @@ class FabricSqlConnection:
                 columns = [column[0] for column in cursor.description]
                 return [self._to_measure(dict(zip(columns, row))) for row in cursor.fetchall()]
         except Exception as error:
+            logger.exception(
+                "Fabric query failed database=%s table=IA_COMERCIAL.AGT_MEDIDA",
+                self._database,
+            )
             raise FabricConnectionError("Unable to query measures from the Fabric warehouse.") from error
 
     @staticmethod

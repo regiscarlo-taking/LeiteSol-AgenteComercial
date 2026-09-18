@@ -30,6 +30,60 @@ button {
   min-height: 100vh;
 }
 
+.auth-shell {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1.25rem;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 30rem);
+  padding: 2rem;
+  border: 1px solid rgba(245, 236, 217, 0.12);
+  border-radius: 28px;
+  background: rgba(7, 14, 10, 0.82);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+.auth-panel h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.auth-copy {
+  margin: 0;
+  color: rgba(245, 236, 217, 0.72);
+}
+
+.auth-panel label {
+  display: grid;
+  gap: 0.45rem;
+  color: rgba(245, 236, 217, 0.84);
+  font-size: 0.9rem;
+}
+
+.auth-panel input {
+  width: 100%;
+  border: 1px solid rgba(245, 236, 217, 0.16);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.auth-panel input:focus {
+  border-color: rgba(255, 190, 128, 0.7);
+}
+
+.auth-error {
+  margin: 0;
+  color: #ff9f91;
+}
+
 .workspace-shell {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);

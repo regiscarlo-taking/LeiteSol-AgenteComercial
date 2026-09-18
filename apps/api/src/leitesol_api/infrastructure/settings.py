@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,9 +19,15 @@ class Settings(BaseSettings):
     fabric_warehouse_id: str = ""
     fabric_server: str = ""
     fabric_database: str = "AgenteFaturamentoDW"
+    fabric_authentication: str = "ActiveDirectoryServicePrincipal"
     entra_tenant_id: str = ""
     entra_client_id: str = ""
     entra_client_secret: str = ""
+    key_vault_url: str = ""
+    gemini_api_key_secret_name: str = "GEMINI-API-KEY"
+    storage_account_url: str = ""
+    storage_container_name: str = ""
+    storage_blob_prefix: str = ""
     fabric_driver: str = "ODBC Driver 18 for SQL Server"
     fabric_connection_timeout: int = 10
     jwt_secret_key: str = ""
@@ -69,7 +76,7 @@ class Settings(BaseSettings):
         )
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(Path.cwd() / ".env", Path(__file__).resolve().parents[5] / ".env"),
         env_prefix="LEITESOL_API_",
         extra="ignore",
     )

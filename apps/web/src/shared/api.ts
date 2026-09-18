@@ -9,6 +9,27 @@ import type {
 
 import { requestApi } from "./http";
 
+export interface AuthToken {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export const authenticate = async (username: string, password: string): Promise<AuthToken> => {
+  const response = await fetch("/api/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Usuário ou senha inválidos.");
+  }
+
+  return (await response.json()) as AuthToken;
+};
+
 export const getGatewayHealth = async (): Promise<BaseResponse<HealthStatus>> =>
   requestApi<HealthStatus>({
     url: "/health/live",
@@ -24,6 +45,9 @@ export const getBackendHealth = async (): Promise<BaseResponse<HealthStatus>> =>
 export const listMeasures = async (): Promise<BaseResponse<Measure[]>> =>
   requestApi<Measure[]>({
     url: "/api/fabric/measures",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
   });
 
