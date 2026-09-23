@@ -3,12 +3,81 @@ import logging
 from typing import Any
 
 from leitesol_api.domain.measure import Measure
+from leitesol_api.domain.sql_result import CatalogEntity, SqlResult
 
 logger = logging.getLogger("leitesol.api.fabric")
 
 
 class FabricConnectionError(RuntimeError):
     pass
+
+
+class EntityNotAllowedError(FabricConnectionError):
+    pass
+
+
+def _table_entities(names: tuple[str, ...]) -> tuple[CatalogEntity, ...]:
+    return tuple(
+        CatalogEntity(name.lower(), "IA_COMERCIAL", name, "table")
+        for name in names
+    )
+
+
+def _view_entities(names: tuple[str, ...]) -> tuple[CatalogEntity, ...]:
+    return tuple(
+        CatalogEntity(name.removeprefix("vw_").lower(), "IA_COMERCIAL", name, "view")
+        for name in names
+    )
+
+
+# Entidades declaradas em 01_ddl_catalogo_agente.sql.
+RUNTIME_TABLES = (
+    "AGT_SKILL",
+    "AGT_OPERACAO",
+    "AGT_OPERACAO_PARAMETRO",
+    "AGT_MEDIDA",
+    "AGT_DIMENSAO",
+    "AGT_RELACIONAMENTO",
+    "AGT_REGRA_TEMPO",
+    "AGT_REGRA_TRANSVERSAL",
+    "AGT_MAPA_CAMPO",
+    "AGT_GLOSSARIO",
+    "AGT_INTENCAO_EXEMPLO",
+    "AGT_PARAM_FECHAMENTO",
+)
+
+MANAGEMENT_TABLES = (
+    "AGT_GESTAO_SKILL",
+    "AGT_GESTAO_OPERACAO",
+    "AGT_GESTAO_MEDIDA",
+    "AGT_GESTAO_DIMENSAO",
+    "AGT_GESTAO_RELACIONAMENTO",
+    "AGT_GESTAO_MAPA_CAMPO",
+    "AGT_GESTAO_PENDENCIA",
+)
+
+# Views declaradas em 02_views_analiticas.sql.
+ANALYTICAL_VIEWS = (
+    "vw_dim_calendario",
+    "vw_dim_cliente",
+    "vw_dim_produto",
+    "vw_dim_representante",
+    "vw_dim_supervisor",
+    "vw_hierarquia_equipe",
+    "vw_rls_alcance",
+    "vw_dim_segmento",
+    "vw_dim_geografia",
+    "vw_dim_filial",
+    "vw_fato_faturamento",
+    "vw_fato_produto",
+)
+
+CATALOG_ENTITIES = (
+    *_table_entities(RUNTIME_TABLES),
+    *_table_entities(MANAGEMENT_TABLES),
+    *_view_entities(ANALYTICAL_VIEWS),
+)
+ENTITY_BY_NAME = {entity.name: entity for entity in CATALOG_ENTITIES}
 
 
 class FabricSqlConnection:
@@ -80,6 +149,55 @@ class FabricSqlConnection:
                 self._database,
             )
             raise FabricConnectionError("Unable to query measures from the Fabric warehouse.") from error
+
+    def list_entities(self) -> list[CatalogEntity]:
+        return list(CATALOG_ENTITIES)
+
+    def query_entity(self, entity: str, limit: int = 100) -> SqlResult:
+        selected_entity = ENTITY_BY_NAME.get(entity.strip().lower())
+        if selected_entity is None:
+            raise EntityNotAllowedError(f"Entity is not allowed: {entity}")
+
+        bounded_limit = min(max(limit, 1), 100)
+        sql = (
+            f"SELECT TOP {bounded_limit} * "
+            f"FROM {selected_entity.qualified_name}"
+        )
+
+        try:
+            import pyodbc
+
+            with pyodbc.connect(self._connection_string(), timeout=self._timeout) as connection:
+                cursor = connection.cursor()
+                cursor.execute(sql)
+                columns = [column[0] for column in cursor.description]
+                rows = [
+                    {column: self._json_value(value) for column, value in zip(columns, row)}
+                    for row in cursor.fetchall()
+                ]
+        except Exception as error:
+            logger.exception(
+                "Fabric entity query failed database=%s entity=%s",
+                self._database,
+                selected_entity.name,
+            )
+            raise FabricConnectionError("Unable to query the Fabric entity.") from error
+
+        return SqlResult(
+            entity=selected_entity.name,
+            sql=sql,
+            columns=columns,
+            rows=rows,
+            row_count=len(rows),
+        )
+
+    @staticmethod
+    def _json_value(value: Any) -> Any:
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+        if hasattr(value, "as_tuple"):
+            return float(value)
+        return value
 
     @staticmethod
     def _to_measure(row: Mapping[str, Any]) -> Measure:

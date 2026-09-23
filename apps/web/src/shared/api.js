@@ -10,6 +10,15 @@ export const authenticate = async (username, password) => {
     }
     return (await response.json());
 };
+export const queryChat = async (question) => requestApi({
+    url: "/api/chat/query",
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
+    data: { question },
+    errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
+});
 export const getGatewayHealth = async () => requestApi({
     url: "/health/live",
     errorMessage: "Nao foi possivel consultar a saude do gateway.",
@@ -24,6 +33,15 @@ export const listMeasures = async () => requestApi({
         Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
     },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
+});
+export const queryEntity = async (entity, limit = 100) => requestApi({
+    url: "/api/fabric/query",
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
+    data: { entity, limit },
+    errorMessage: "Nao foi possivel consultar a entidade do Fabric.",
 });
 export const listChats = async () => requestApi({
     url: "/api/chats",

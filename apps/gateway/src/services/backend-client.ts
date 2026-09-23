@@ -14,6 +14,24 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface EntityQueryRequest {
+  entity: string;
+  limit: number;
+}
+
+export interface SqlResultResponse {
+  entity: string;
+  sql: string;
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  rowCount: number;
+}
+
+export interface ChatQueryResponse {
+  answer: string;
+  sqlResult: SqlResultResponse;
+}
+
 export class BackendRequestError extends Error {
   constructor(
     message: string,
@@ -79,4 +97,46 @@ export const fetchBackendMeasures = async (
   }
 
   return (await response.json()) as BaseResponse<Measure[]>;
+};
+
+export const fetchBackendEntity = async (
+  traceId: string,
+  query: EntityQueryRequest,
+  authorization?: string,
+): Promise<BaseResponse<SqlResultResponse>> => {
+  const response = await fetch(`${env.backendUrl}/fabric/query`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.backendApiKey,
+      "x-request-id": traceId,
+      ...(authorization ? { authorization } : {}),
+    },
+    body: JSON.stringify(query),
+  });
+
+  const payload = (await response.json().catch(() => null)) as BaseResponse<SqlResultResponse> | null;
+  if (!payload) {
+    throw new Error(`Backend unavailable: ${response.status}`);
+  }
+  return payload;
+};
+
+export const fetchBackendChatQuery = async (
+  traceId: string,
+  question: string,
+  authorization?: string,
+): Promise<BaseResponse<ChatQueryResponse>> => {
+  const response = await fetch(`${env.backendUrl}/chat/query`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-request-id": traceId,
+      ...(authorization ? { authorization } : {}),
+    },
+    body: JSON.stringify({ question }),
+  });
+  const payload = (await response.json().catch(() => null)) as BaseResponse<ChatQueryResponse> | null;
+  if (!payload) throw new Error(`Backend unavailable: ${response.status}`);
+  return payload;
 };

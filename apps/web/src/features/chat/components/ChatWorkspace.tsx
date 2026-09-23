@@ -10,17 +10,21 @@ export const ChatWorkspace = () => {
     busy,
     chats,
     draft,
+    entityName,
+    entityResult,
     error,
     fileInputRef,
     formatTime,
     gatewayStatus,
     handleCreateChat,
+    handleQueryEntity,
     handleFileSelection,
     loadLocalContext,
     openChat,
     removeAttachment,
     sendMessage,
     setDraft,
+    setEntityName,
     setUserId,
     userId,
   } = useChatWorkspace();
@@ -95,6 +99,44 @@ export const ChatWorkspace = () => {
             Conectar ao gateway
           </button>
         </div>
+
+        <section className="query-panel">
+          <div>
+            <p className="eyebrow">Consulta Fabric</p>
+            <strong>Consultar entidade</strong>
+          </div>
+          <div className="query-controls">
+            <input
+              value={entityName}
+              onChange={(event) => setEntityName(event.target.value)}
+              placeholder="agt_operacao ou dim_cliente"
+              aria-label="Nome da entidade"
+            />
+            <button type="button" className="secondary-action" onClick={() => void handleQueryEntity()} disabled={busy}>
+              Consultar
+            </button>
+          </div>
+          {entityResult ? (
+            <div className="query-result">
+              <code>{entityResult.sql}</code>
+              <div className="result-table-wrap">
+                <table>
+                  <thead>
+                    <tr>{entityResult.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {entityResult.rows.map((row, index) => (
+                      <tr key={`${entityResult.entity}-${index}`}>
+                        {entityResult.columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <small>{entityResult.rowCount} linhas retornadas</small>
+            </div>
+          ) : null}
+        </section>
 
         <div className="chat-board">
           {activeChat ? (

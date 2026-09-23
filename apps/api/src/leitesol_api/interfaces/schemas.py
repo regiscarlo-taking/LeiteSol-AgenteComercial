@@ -49,3 +49,38 @@ class MeasureResponse(BaseModel):
     agent_visible: str | None = Field(default=None, alias="agentVisible")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class EntityQueryRequest(BaseModel):
+    entity: str = Field(min_length=1, max_length=100)
+    limit: int = Field(default=100, ge=1, le=100)
+
+
+class CatalogEntityResponse(BaseModel):
+    name: str
+    schema_name: str = Field(alias="schema")
+    table: str
+    kind: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SqlResultResponse(BaseModel):
+    entity: str
+    sql: str
+    columns: list[str]
+    rows: list[dict[str, object]]
+    row_count: int = Field(alias="rowCount")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ChatQueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+
+
+class ChatQueryResponse(BaseModel):
+    answer: str
+    sql_result: SqlResultResponse = Field(alias="sqlResult")
+
+    model_config = ConfigDict(populate_by_name=True)

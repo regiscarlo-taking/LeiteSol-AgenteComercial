@@ -7,9 +7,28 @@ import {
   getChatConversation,
   listChatConversations,
 } from "../services/mock-chat-service.js";
+import { fetchBackendChatQuery } from "../services/backend-client.js";
 import { createBaseResponse } from "../shared/contracts.js";
 
 export const chatsRouter = Router();
+
+chatsRouter.post("/chat/query", async (request, response, next) => {
+  try {
+    const { question } = request.body as { question?: unknown };
+    if (typeof question !== "string" || !question.trim()) {
+      response.status(400).json({ message: "Question is required." });
+      return;
+    }
+    const result = await fetchBackendChatQuery(
+      response.locals.traceId,
+      question,
+      request.header("authorization"),
+    );
+    response.status(result.statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
 
 chatsRouter.get("/chats", (_request, response) => {
   response.status(200).json(

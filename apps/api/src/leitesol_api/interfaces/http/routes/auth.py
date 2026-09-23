@@ -69,19 +69,13 @@ async def refresh_access_token(refresh_token: str) -> Token:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        username: str = payload.get("sub")
-        token_type: str = payload.get("type")
+        username = payload.get("sub")
+        token_type = payload.get("type")
         
-        if token_type != "refresh":
+        if not isinstance(username, str) or token_type != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token required",
-            )
-        
-        if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
             )
         
         # Gerar novo access token

@@ -1,10 +1,11 @@
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
-from azure.storage.blob import BlobClient, BlobServiceClient
+
+if TYPE_CHECKING:
+    from azure.storage.blob import BlobClient
 
 from leitesol_api.infrastructure.settings import Settings, get_settings
 
@@ -17,6 +18,8 @@ class KeyVaultSecretProvider:
     def __init__(self, *, vault_url: str, credential: DefaultAzureCredential) -> None:
         if not vault_url:
             raise AzureConfigurationError("LEITESOL_API_KEY_VAULT_URL is not configured.")
+        from azure.keyvault.secrets import SecretClient
+
         self._client = SecretClient(vault_url=vault_url, credential=credential)
 
     def get_secret(self, name: str) -> str:
@@ -45,6 +48,8 @@ class BlobStorageGateway:
             raise AzureConfigurationError(
                 "LEITESOL_API_STORAGE_CONTAINER_NAME is not configured."
             )
+
+        from azure.storage.blob import BlobServiceClient
 
         self._container = BlobServiceClient(
             account_url=account_url,
@@ -76,7 +81,7 @@ class BlobStorageGateway:
         for blob in self._container.list_blobs(name_starts_with=effective_prefix):
             yield blob.name
 
-    def get_blob_client(self, name: str) -> BlobClient:
+    def get_blob_client(self, name: str) -> "BlobClient":
         return self._container.get_blob_client(self._blob_name(name))
 
 
@@ -105,6 +110,5 @@ def get_blob_storage_gateway() -> BlobStorageGateway:
     )
 
 
-def get_blob_client(name: str) -> BlobClient:
+def get_blob_client(name: str) -> "BlobClient":
     return get_blob_storage_gateway().get_blob_client(name)
-EOF

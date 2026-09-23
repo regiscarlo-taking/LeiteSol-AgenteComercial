@@ -371,6 +371,65 @@ button {
   gap: 0.8rem;
 }
 
+.query-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(245, 236, 217, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.query-controls {
+  display: flex;
+  gap: 0.7rem;
+}
+
+.query-controls input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid rgba(245, 236, 217, 0.14);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.query-result {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.query-result code {
+  overflow: auto;
+  color: #ffd08c;
+  white-space: nowrap;
+}
+
+.result-table-wrap {
+  overflow: auto;
+  max-height: 18rem;
+}
+
+.result-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.result-table-wrap th,
+.result-table-wrap td {
+  padding: 0.55rem;
+  border-bottom: 1px solid rgba(245, 236, 217, 0.08);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.result-table-wrap th {
+  color: #ffd08c;
+}
+
 .composer-box {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

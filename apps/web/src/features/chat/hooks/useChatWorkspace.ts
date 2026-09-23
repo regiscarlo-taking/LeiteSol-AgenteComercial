@@ -14,10 +14,11 @@ import {
   getGatewayHealth,
   getChat,
   listChats,
-  listMeasures,
+  queryChat,
+  queryEntity,
+  type SqlResult,
 } from "../../../shared/api";
 import {
-  buildBackendChatReply,
   chatFormSchema,
   toChatSendCommand,
   type ChatFormValues,
@@ -61,6 +62,8 @@ export const useChatWorkspace = () => {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [entityName, setEntityName] = useState("agt_medida");
+  const [entityResult, setEntityResult] = useState<SqlResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadLocalContext = async () => {
@@ -187,9 +190,8 @@ export const useChatWorkspace = () => {
         attachments,
       });
 
-      const measuresResponse = await listMeasures();
-      const measures = measuresResponse.data ?? [];
-      const backendContent = buildBackendChatReply(command.content, measures);
+      const chatResponse = await queryChat(command.content);
+      const backendContent = chatResponse.data?.answer ?? "Nenhuma resposta retornada.";
 
       const nextMessages = [
         ...currentChat.messages,
@@ -234,6 +236,19 @@ export const useChatWorkspace = () => {
     }
   };
 
+  const handleQueryEntity = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await queryEntity(entityName.trim());
+      setEntityResult(response.data ?? null);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return {
     activeChat,
     attachments,
@@ -251,6 +266,10 @@ export const useChatWorkspace = () => {
     openChat,
     removeAttachment,
     sendMessage,
+    entityName,
+    entityResult,
+    handleQueryEntity,
+    setEntityName,
     setDraft,
     setUserId,
     userId,

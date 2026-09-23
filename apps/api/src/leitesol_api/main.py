@@ -11,7 +11,9 @@ from leitesol_api.interfaces.http.middlewares.healthcheck import HealthcheckMidd
 from leitesol_api.interfaces.http.middlewares.logging import LoggingMiddleware
 from leitesol_api.interfaces.http.middlewares.security import ApiKeyMiddleware, SecurityHeadersMiddleware
 from leitesol_api.interfaces.http.routes.auth import router as auth_router, limiter
+from leitesol_api.interfaces.http.routes.chat import router as chat_router
 from leitesol_api.interfaces.http.routes.health import router as health_router
+from leitesol_api.interfaces.http.routes.key_vault import router as key_vault_router
 from leitesol_api.interfaces.http.routes.measures import router as measures_router
 from leitesol_api.interfaces.responses import build_response_payload
 
@@ -72,7 +74,9 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=payload)
 
     app.include_router(auth_router)
+    app.include_router(chat_router)
     app.include_router(health_router)
+    app.include_router(key_vault_router)
     app.include_router(measures_router)
 
     # Customizar OpenAPI schema para documentar OAuth2

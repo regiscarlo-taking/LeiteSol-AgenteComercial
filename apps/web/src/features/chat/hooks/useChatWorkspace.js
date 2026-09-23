@@ -1,6 +1,6 @@
 import { startTransition, useRef, useState } from "react";
-import { createChat, getBackendHealth, getGatewayHealth, getChat, listChats, listMeasures, } from "../../../shared/api";
-import { buildBackendChatReply, chatFormSchema, toChatSendCommand, } from "../domain/chat-form";
+import { createChat, getBackendHealth, getGatewayHealth, getChat, listChats, queryChat, queryEntity, } from "../../../shared/api";
+import { chatFormSchema, toChatSendCommand, } from "../domain/chat-form";
 const formatTime = (value) => new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
@@ -34,6 +34,8 @@ export const useChatWorkspace = () => {
     const [attachments, setAttachments] = useState([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
+    const [entityName, setEntityName] = useState("agt_medida");
+    const [entityResult, setEntityResult] = useState(null);
     const fileInputRef = useRef(null);
     const loadLocalContext = async () => {
         setBusy(true);
@@ -138,9 +140,8 @@ export const useChatWorkspace = () => {
                 message: parsed.data.message,
                 attachments,
             });
-            const measuresResponse = await listMeasures();
-            const measures = measuresResponse.data ?? [];
-            const backendContent = buildBackendChatReply(command.content, measures);
+            const chatResponse = await queryChat(command.content);
+            const backendContent = chatResponse.data?.answer ?? "Nenhuma resposta retornada.";
             const nextMessages = [
                 ...currentChat.messages,
                 {
@@ -183,6 +184,20 @@ export const useChatWorkspace = () => {
             setBusy(false);
         }
     };
+    const handleQueryEntity = async () => {
+        setBusy(true);
+        setError("");
+        try {
+            const response = await queryEntity(entityName.trim());
+            setEntityResult(response.data ?? null);
+        }
+        catch (requestError) {
+            setError(requestError.message);
+        }
+        finally {
+            setBusy(false);
+        }
+    };
     return {
         activeChat,
         attachments,
@@ -200,6 +215,10 @@ export const useChatWorkspace = () => {
         openChat,
         removeAttachment,
         sendMessage,
+        entityName,
+        entityResult,
+        handleQueryEntity,
+        setEntityName,
         setDraft,
         setUserId,
         userId,

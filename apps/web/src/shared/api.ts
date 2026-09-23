@@ -16,6 +16,19 @@ export interface AuthToken {
   expires_in: number;
 }
 
+export interface SqlResult {
+  entity: string;
+  sql: string;
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  rowCount: number;
+}
+
+export interface ChatQueryResult {
+  answer: string;
+  sqlResult: SqlResult;
+}
+
 export const authenticate = async (username: string, password: string): Promise<AuthToken> => {
   const response = await fetch("/api/auth/token", {
     method: "POST",
@@ -29,6 +42,17 @@ export const authenticate = async (username: string, password: string): Promise<
 
   return (await response.json()) as AuthToken;
 };
+
+export const queryChat = async (question: string): Promise<BaseResponse<ChatQueryResult>> =>
+  requestApi<ChatQueryResult, { question: string }>({
+    url: "/api/chat/query",
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
+    data: { question },
+    errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
+  });
 
 export const getGatewayHealth = async (): Promise<BaseResponse<HealthStatus>> =>
   requestApi<HealthStatus>({
@@ -49,6 +73,17 @@ export const listMeasures = async (): Promise<BaseResponse<Measure[]>> =>
       Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
     },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
+  });
+
+export const queryEntity = async (entity: string, limit = 100): Promise<BaseResponse<SqlResult>> =>
+  requestApi<SqlResult, { entity: string; limit: number }>({
+    url: "/api/fabric/query",
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
+    data: { entity, limit },
+    errorMessage: "Nao foi possivel consultar a entidade do Fabric.",
   });
 
 export const listChats = async (): Promise<BaseResponse<ChatConversationSummary[]>> =>
