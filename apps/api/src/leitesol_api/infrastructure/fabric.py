@@ -46,25 +46,18 @@ RUNTIME_TABLES = (
     "AGT_PARAM_FECHAMENTO",
 )
 
-MANAGEMENT_TABLES = (
-    "AGT_GESTAO_SKILL",
-    "AGT_GESTAO_OPERACAO",
-    "AGT_GESTAO_MEDIDA",
-    "AGT_GESTAO_DIMENSAO",
-    "AGT_GESTAO_RELACIONAMENTO",
-    "AGT_GESTAO_MAPA_CAMPO",
-    "AGT_GESTAO_PENDENCIA",
-)
+# As AGT_GESTAO_* ficam fora do agente (D-A15): 14_permissao_agente.sql
+# aplica DENY nelas para a identidade do agente. Não reintroduzir aqui.
 
-# Views declaradas em 02_views_analiticas.sql.
+# Views declaradas em 02_views_analiticas.sql. As views de segurança
+# (vw_hierarquia_equipe, vw_rls_alcance) cruzam e-mail x equipe e servem só
+# para resolver a alçada no backend; nunca são consultáveis por rota ou LLM.
 ANALYTICAL_VIEWS = (
     "vw_dim_calendario",
     "vw_dim_cliente",
     "vw_dim_produto",
     "vw_dim_representante",
     "vw_dim_supervisor",
-    "vw_hierarquia_equipe",
-    "vw_rls_alcance",
     "vw_dim_segmento",
     "vw_dim_geografia",
     "vw_dim_filial",
@@ -74,7 +67,6 @@ ANALYTICAL_VIEWS = (
 
 CATALOG_ENTITIES = (
     *_table_entities(RUNTIME_TABLES),
-    *_table_entities(MANAGEMENT_TABLES),
     *_view_entities(ANALYTICAL_VIEWS),
 )
 ENTITY_BY_NAME = {entity.name: entity for entity in CATALOG_ENTITIES}

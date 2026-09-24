@@ -69,7 +69,7 @@ def query_chat(
             "answer": plan.answer,
             "sqlResult": {
                 "entity": result.entity,
-                "sql": result.sql,
+                "sql": result.sql if settings.is_development else None,
                 "columns": result.columns,
                 "rows": result.rows,
                 "rowCount": result.row_count,

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
             raise ValueError("jwt_secret_key must be set in production environment")
 
     @property
+    def is_development(self) -> bool:
+        return self.environment == "development"
+
+    @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 

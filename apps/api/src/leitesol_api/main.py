@@ -35,9 +35,10 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="LeiteSol API",
         version="0.1.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        # Documentação interativa não é publicada em produção.
+        docs_url=None if settings.environment == "production" else "/docs",
+        redoc_url=None if settings.environment == "production" else "/redoc",
+        openapi_url=None if settings.environment == "production" else "/openapi.json",
         swagger_ui_init_oauth={
             "clientId": "swagger-ui",
             "usePkceWithAuthorizationCodeGrant": False,

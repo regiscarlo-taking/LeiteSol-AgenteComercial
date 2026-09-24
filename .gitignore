@@ -35,3 +35,8 @@ pip-wheel-metadata/
 .env.local
 pnpm-lock.yaml
 uv.lock
+
+# Saída do tsc no web: o Vite resolve .js antes de .tsx, então um .js
+# compilado ao lado do fonte passa a ser o código servido.
+apps/web/src/**/*.js
+apps/web/vite.config.js

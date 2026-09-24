@@ -51,7 +51,7 @@ export interface ChatAttachment {
 
 export interface ChatSqlResult {
   entity: string;
-  sql: string;
+  sql?: string | null;
   columns: string[];
   rows: Array<Record<string, unknown>>;
   rowCount: number;

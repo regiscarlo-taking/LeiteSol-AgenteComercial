@@ -21,7 +21,7 @@ export interface EntityQueryRequest {
 
 export interface SqlResultResponse {
   entity: string;
-  sql: string;
+  sql?: string | null;
   columns: string[];
   rows: Array<Record<string, unknown>>;
   rowCount: number;

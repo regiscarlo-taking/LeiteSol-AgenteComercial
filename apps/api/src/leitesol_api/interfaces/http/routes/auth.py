@@ -15,6 +15,7 @@ from leitesol_api.infrastructure.auth import (
     oauth2_scheme,
 )
 from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.interfaces.schemas import RefreshTokenRequest
 
 router = APIRouter(tags=["authentication"])
 limiter = Limiter(key_func=get_remote_address)
@@ -54,13 +55,15 @@ async def login(request: Request, credentials: LoginRequest) -> Token:
 
 
 @router.post("/token/refresh", response_model=Token)
-async def refresh_access_token(refresh_token: str) -> Token:
+async def refresh_access_token(body: RefreshTokenRequest) -> Token:
     """
     Renovar access token usando refresh token.
     
-    Não requer re-autenticação.
+    Não requer re-autenticação. O refresh token vai no corpo, nunca na URL,
+    para não ficar registrado em log de proxy.
     """
     settings = get_settings()
+    refresh_token = body.refresh_token
     
     try:
         import jwt

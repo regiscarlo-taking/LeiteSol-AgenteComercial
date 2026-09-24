@@ -67,12 +67,16 @@ class CatalogEntityResponse(BaseModel):
 
 class SqlResultResponse(BaseModel):
     entity: str
-    sql: str
+    sql: str | None = None
     columns: list[str]
     rows: list[dict[str, object]]
     row_count: int = Field(alias="rowCount")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
 
 
 class ChatQueryRequest(BaseModel):
