@@ -41,11 +41,22 @@ export class BackendRequestError extends Error {
   }
 }
 
+const requestBackend = async (url: string, options?: RequestInit): Promise<Response> => {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    throw new BackendRequestError(
+      "A API não está acessível. Inicie a API e confirme BACKEND_URL.",
+      503,
+    );
+  }
+};
+
 export const authenticateBackend = async (
   credentials: LoginCredentials,
   traceId: string,
 ): Promise<BackendTokenResponse> => {
-  const response = await fetch(`${env.backendUrl}/token`, {
+  const response = await requestBackend(`${env.backendUrl}/token`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -62,7 +73,7 @@ export const authenticateBackend = async (
 };
 
 export const fetchBackendHealth = async (traceId: string): Promise<BaseResponse<HealthStatus>> => {
-  const response = await fetch(`${env.backendUrl}/health`, {
+  const response = await requestBackend(`${env.backendUrl}/health`, {
     headers: {
       "x-api-key": env.backendApiKey,
       "x-request-id": traceId,
@@ -80,7 +91,7 @@ export const fetchBackendMeasures = async (
   traceId: string,
   authorization?: string,
 ): Promise<BaseResponse<Measure[]>> => {
-  const response = await fetch(`${env.backendUrl}/fabric/measures`, {
+  const response = await requestBackend(`${env.backendUrl}/fabric/measures`, {
     headers: {
       "x-api-key": env.backendApiKey,
       "x-request-id": traceId,
@@ -104,7 +115,7 @@ export const fetchBackendEntity = async (
   query: EntityQueryRequest,
   authorization?: string,
 ): Promise<BaseResponse<SqlResultResponse>> => {
-  const response = await fetch(`${env.backendUrl}/fabric/query`, {
+  const response = await requestBackend(`${env.backendUrl}/fabric/query`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -127,7 +138,7 @@ export const fetchBackendChatQuery = async (
   question: string,
   authorization?: string,
 ): Promise<BaseResponse<ChatQueryResponse>> => {
-  const response = await fetch(`${env.backendUrl}/chat/query`, {
+  const response = await requestBackend(`${env.backendUrl}/chat/query`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

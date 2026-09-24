@@ -12,6 +12,7 @@ import { authRouter } from "./routes/auth.js";
 import { fabricRouter } from "./routes/fabric.js";
 import { healthRouter } from "./routes/health.js";
 import { createBaseResponse } from "./shared/contracts.js";
+import { BackendRequestError } from "./services/backend-client.js";
 
 export const createApp = () => {
   const app = express();
@@ -51,12 +52,13 @@ export const createApp = () => {
   app.use("/api", fabricRouter);
 
   app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
-    response.status(502).json(
+    const statusCode = error instanceof BackendRequestError ? error.statusCode : 502;
+    response.status(statusCode).json(
       createBaseResponse({
         data: null,
         error: error.message,
         message: "Gateway failed to process the request.",
-        statusCode: 502,
+        statusCode,
         traceId: response.locals.traceId ?? "gateway-error",
       }),
     );

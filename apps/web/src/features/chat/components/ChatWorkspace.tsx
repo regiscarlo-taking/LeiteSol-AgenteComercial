@@ -6,27 +6,18 @@ export const ChatWorkspace = () => {
   const {
     activeChat,
     attachments,
-    backendStatus,
     busy,
     chats,
     draft,
-    entityName,
-    entityResult,
     error,
     fileInputRef,
     formatTime,
-    gatewayStatus,
     handleCreateChat,
-    handleQueryEntity,
     handleFileSelection,
-    loadLocalContext,
     openChat,
     removeAttachment,
     sendMessage,
     setDraft,
-    setEntityName,
-    setUserId,
-    userId,
   } = useChatWorkspace();
 
   return (
@@ -35,10 +26,7 @@ export const ChatWorkspace = () => {
         <div className="brand-card">
           <p className="eyebrow">LeiteSol Agent Hub</p>
           <h1>Converse com a operação comercial</h1>
-          <p>
-            O gateway já está mockando o fluxo do agente para você desenhar a experiência antes de
-            ligar um provedor real.
-          </p>
+          <p>Faça perguntas em linguagem natural e consulte os dados comerciais com segurança.</p>
           <button className="primary-action" type="button" onClick={() => void handleCreateChat()} disabled={busy}>
             Nova conversa
           </button>
@@ -70,73 +58,10 @@ export const ChatWorkspace = () => {
       <section className="chat-stage">
         <header className="chat-header">
           <div>
-            <p className="eyebrow">Gateway first</p>
+            <p className="eyebrow">Assistente comercial</p>
             <h2>{activeChat?.title ?? "Assistente comercial"}</h2>
           </div>
-
-          <div className="status-strip">
-            <div className="status-pill">
-              <span className="status-dot is-online" />
-              Gateway {gatewayStatus?.data?.status ?? "loading"}
-            </div>
-            <div className="status-pill">
-              <span className="status-dot is-online" />
-              API {backendStatus?.data?.status ?? "loading"}
-            </div>
-          </div>
         </header>
-
-        <div className="identity-panel">
-          <label>
-            Usuário
-            <input
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
-              placeholder="id do usuário"
-            />
-          </label>
-          <button type="button" className="secondary-action" onClick={() => void loadLocalContext()} disabled={busy}>
-            Conectar ao gateway
-          </button>
-        </div>
-
-        <section className="query-panel">
-          <div>
-            <p className="eyebrow">Consulta Fabric</p>
-            <strong>Consultar entidade</strong>
-          </div>
-          <div className="query-controls">
-            <input
-              value={entityName}
-              onChange={(event) => setEntityName(event.target.value)}
-              placeholder="agt_operacao ou dim_cliente"
-              aria-label="Nome da entidade"
-            />
-            <button type="button" className="secondary-action" onClick={() => void handleQueryEntity()} disabled={busy}>
-              Consultar
-            </button>
-          </div>
-          {entityResult ? (
-            <div className="query-result">
-              <code>{entityResult.sql}</code>
-              <div className="result-table-wrap">
-                <table>
-                  <thead>
-                    <tr>{entityResult.columns.map((column) => <th key={column}>{column}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {entityResult.rows.map((row, index) => (
-                      <tr key={`${entityResult.entity}-${index}`}>
-                        {entityResult.columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <small>{entityResult.rowCount} linhas retornadas</small>
-            </div>
-          ) : null}
-        </section>
 
         <div className="chat-board">
           {activeChat ? (
@@ -246,9 +171,7 @@ export const ChatWorkspace = () => {
           </div>
 
           <div className="composer-hint">
-            <span>JSON only via gateway</span>
-            <span>Anexos ainda mockados</span>
-            <span>{error || "Pronto para experimentar o fluxo inicial."}</span>
+            <span>{error || "Pergunte sobre medidas, clientes, produtos ou faturamento."}</span>
           </div>
         </footer>
       </section>

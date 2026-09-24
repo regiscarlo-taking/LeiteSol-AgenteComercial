@@ -1,22 +1,16 @@
-import { startTransition, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 import type {
-  BaseResponse,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
-  HealthStatus,
 } from "@leitesol/contracts";
 
 import {
   createChat,
-  getBackendHealth,
-  getGatewayHealth,
   getChat,
   listChats,
   queryChat,
-  queryEntity,
-  type SqlResult,
 } from "../../../shared/api";
 import {
   chatFormSchema,
@@ -53,53 +47,31 @@ const toConversationSummary = (conversation: ChatConversation): ChatConversation
 };
 
 export const useChatWorkspace = () => {
-  const [gatewayStatus, setGatewayStatus] = useState<BaseResponse<HealthStatus> | null>(null);
-  const [backendStatus, setBackendStatus] = useState<BaseResponse<HealthStatus> | null>(null);
   const [chats, setChats] = useState<ChatConversationSummary[]>([]);
   const [activeChat, setActiveChat] = useState<ChatConversation | null>(null);
-  const [userId, setUserId] = useState("user-001");
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [entityName, setEntityName] = useState("agt_medida");
-  const [entityResult, setEntityResult] = useState<SqlResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const loadLocalContext = async () => {
-    setBusy(true);
-    setError("");
-
-    try {
-      const [gatewayHealth, backendHealth, chatList] = await Promise.all([
-        getGatewayHealth(),
-        getBackendHealth(),
-        listChats(),
-      ]);
-
-      setGatewayStatus(gatewayHealth);
-      setBackendStatus(backendHealth);
-      setChats(chatList.data ?? []);
-
-      const chatItems = chatList.data ?? [];
-
-      if (chatItems.length > 0) {
-        const firstChat = chatItems[0];
-        const detail = await getChat(firstChat.id);
-        setActiveChat(detail.data ?? null);
+  useEffect(() => {
+    const loadChats = async () => {
+      try {
+        const chatList = await listChats();
+        setChats(chatList.data ?? []);
+      } catch {
+        // The conversation list is an enhancement; the user can still start a chat.
       }
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    };
+
+    void loadChats();
+  }, []);
 
   const openChat = async (chatId: string) => {
-    setBusy(true);
-    setError("");
-
     try {
+      setBusy(true);
+      setError("");
       const response = await getChat(chatId);
       startTransition(() => {
         setActiveChat(response.data);
@@ -155,7 +127,7 @@ export const useChatWorkspace = () => {
 
   const sendMessage = async () => {
     const parsed = chatFormSchema.safeParse({
-      userId,
+      userId: "authenticated-user",
       message: draft,
     } satisfies ChatFormValues);
 
@@ -176,7 +148,7 @@ export const useChatWorkspace = () => {
         activeChat ??
         (
           await createChat({
-            title: `Conversa de ${parsed.data.userId}`,
+            title: "Nova consulta comercial",
           })
         ).data;
 
@@ -214,7 +186,7 @@ export const useChatWorkspace = () => {
 
       const updatedConversation: typeof currentChat = {
         ...currentChat,
-        title: currentChat.title || `Conversa de ${parsed.data.userId}`,
+        title: currentChat.title || "Nova consulta comercial",
         updatedAt: new Date().toISOString(),
         status: "active",
         messages: nextMessages,
@@ -237,42 +209,20 @@ export const useChatWorkspace = () => {
     }
   };
 
-  const handleQueryEntity = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const response = await queryEntity(entityName.trim());
-      setEntityResult(response.data ?? null);
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return {
     activeChat,
     attachments,
-    backendStatus,
     busy,
     chats,
     draft,
     error,
     fileInputRef,
     formatTime,
-    gatewayStatus,
     handleCreateChat,
     handleFileSelection,
-    loadLocalContext,
     openChat,
     removeAttachment,
     sendMessage,
-    entityName,
-    entityResult,
-    handleQueryEntity,
-    setEntityName,
     setDraft,
-    setUserId,
-    userId,
   };
 };

@@ -8,6 +8,7 @@ import type {
 } from "@leitesol/contracts";
 
 import { requestApi } from "./http";
+import { getValidAccessToken } from "./auth-session";
 
 export interface AuthToken {
   access_token: string;
@@ -42,7 +43,7 @@ export const queryChat = async (question: string): Promise<BaseResponse<ChatQuer
     url: "/api/chat/query",
     method: "POST",
     headers: {
-      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
     },
     data: { question },
     errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
@@ -64,7 +65,7 @@ export const listMeasures = async (): Promise<BaseResponse<Measure[]>> =>
   requestApi<Measure[]>({
     url: "/api/fabric/measures",
     headers: {
-      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
     },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
   });
@@ -74,7 +75,7 @@ export const queryEntity = async (entity: string, limit = 100): Promise<BaseResp
     url: "/api/fabric/query",
     method: "POST",
     headers: {
-      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
     },
     data: { entity, limit },
     errorMessage: "Nao foi possivel consultar a entidade do Fabric.",
