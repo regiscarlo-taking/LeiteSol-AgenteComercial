@@ -150,3 +150,71 @@ O `/chat/query` antigo passou a existir **só em development**: ele devolve linh
 - ⚠️ **Decisão pendente de registro:** os números saem de **T-SQL sobre as views**, com as fórmulas do `AGT_MEDIDA`, e não do modelo semântico via DAX (contrato §1). É o caminho da A2.16; a reconciliação com o Power BI (`30_reconciliacao_bi.sql`) é o que garante que batem.
 - ⚠️ **Gateway e web ainda chamam `/chat/query`**, que agora é só de development. Ligar a tela ao `/perguntas` e ao MSAL é o próximo passo do front.
 - Sinônimos do `AGT_GLOSSARIO` ainda não entram na normalização de produto.
+
+---
+
+## Tela ligada ao `/perguntas` (24-09)
+
+- **Gateway:** rota nova `POST /api/perguntas`, que repassa ao `POST /perguntas` da API com o `Authorization` do usuário. Erro do FastAPI fora do envelope (ex.: 401) é convertido para o `BaseResponse`; antes, o gateway respondia sem status.
+- **Contratos (`packages/contracts`):** tipo `AgentAnswer` com o envelope do §6, e `ChatMessage.agentAnswer`.
+- **Web:** o envio de mensagem chama `askQuestion` (`/api/perguntas`). A bolha do agente mostra a narrativa, ou a pergunta de volta quando o status é `esclarecimento`. Abaixo dela, o componente `AgentAnswerView` mostra período e comparação, recorte, a tabela com os rótulos e unidades do envelope (R$, KG, %), o bloco de exceções, os avisos e o protocolo (`correlation_id`).
+- **Sem retentativa na pergunta:** o `requestApi` repetia até 3 vezes em caso de falha, e cada repetição de uma pergunta é outra chamada paga ao Gemini. Agora ele aceita `retries`, e o `askQuestion` usa 0.
+- **Verificado:** `tsc --noEmit` limpo em contracts, web e gateway; `npm run build` do web e do gateway ok, sem `.js` gerado em `src`. Teste ponta a ponta local, web → gateway → API: login local, `POST /api/perguntas` devolvendo o envelope (`erro` 503, porque não havia chave do Gemini nesta máquina) e 401 sem token.
+- O painel "Consultar entidade" e o `/chat/query` continuam na tela e na API **só em development**, para inspeção.
+
+---
+
+## Dependências — o que cada uma significa
+
+O código desta branch está pronto e testado com banco e LLM simulados. Para responder de verdade, ele depende das peças abaixo. Cada uma diz **o que é**, **por que o agente precisa dela** e **quem resolve**.
+
+### A. Para funcionar no Warehouse (dados)
+
+| Dependência | O que significa | Por que precisa | Quem |
+|---|---|---|---|
+| **View `IA_COMERCIAL.vw_rls_usuario_equipe` aplicada no `AgenteFaturamentoDW`** | Uma view nova (script `02_views_analiticas.sql`) que lê a tabela de acesso `IA_COMUM.RLS_USUARIO_EQUIPE` (e-mail → equipe) do espelho e a deixa disponível dentro do Warehouse | A identidade do agente, por segurança, **não enxerga o espelho**. Sem essa view, o backend não descobre a carteira do usuário e todo usuário que não for de visão completa recebe `sem_alcada` | Bruno (aplicar no Warehouse) |
+| **Usuário de serviço do agente com permissão mínima** | A identidade (service principal) que o backend usa para ler o Warehouse: `SELECT` no schema `IA_COMERCIAL` e `DENY` nas `AGT_GESTAO_*` (`14_permissao_agente.sql`) | É a fronteira de segurança do MVP: o agente só lê o que precisa. Se a identidade tiver "acesso a tudo" (P-APPPERM), ela lê o espelho cru. O `scripts/portao_f.py` confere | Cliente cria; Bruno confere |
+| **Nomes de coluna das views** | O SQL da OP12 usa os nomes do contrato gerado (`FlagProdutoAcabado`, `FlagExterior`, `MesFechado`, `CNPJ`…) | Se o tipo ou o formato real for diferente (ex.: flag como texto, CNPJ com pontuação), a consulta falha ou filtra errado | Regis/Bruno, no primeiro teste real |
+
+### B. Para autenticar o usuário (Entra ID)
+
+| Dependência | O que significa | Por que precisa | Quem |
+|---|---|---|---|
+| **App registration da API — "expor uma API"** | No Entra ID do cliente, o cadastro da aplicação ganha um identificador próprio (ex.: `api://<client-id>`). Esse é o valor de `LEITESOL_API_ENTRA_API_AUDIENCE` | O token do usuário diz "para quem" foi emitido (`aud`). A API só aceita token emitido para ela; token de outro sistema é recusado | Cliente (admin do Entra) |
+| **Token versão 2** (`accessTokenAcceptedVersion = 2` no manifesto) | Configuração do cadastro que define o formato do token | A API valida o emissor no formato v2 (`login.microsoftonline.com/<tenant>/v2.0`). Com token v1, todo login é recusado | Cliente |
+| **Claim `groups` no token** | Configuração para o token trazer os grupos de que o usuário participa | É assim que a API sabe quem é **diretoria / Adm. Vendas** (visão completa) sem depender da tabela de acesso | Cliente |
+| **IDs dos grupos de visão completa** | Os identificadores (object id) dos grupos do Entra que veem tudo, em `LEITESOL_API_ENTRA_FULL_ACCESS_GROUP_IDS` | Sem eles, ninguém tem visão completa: todo mundo é recortado pela carteira | Cliente informa |
+| **Login na tela (MSAL) e intranet — P-INTRANET / Q-718** | A tela precisa obter o token do Entra (biblioteca MSAL) e mandá-lo à API. Hoje ela usa o login local, que **só existe em development** | Fora de development não há outro jeito de entrar. Depende de como a intranet entrega a identidade e das definições acima | Regis (front) + cliente |
+| **Usuário departamental da Adm. Vendas (Q-306)** | Conta compartilhada pedida pelo cliente | Conta compartilhada não tem e-mail individual: só funciona como visão completa (via grupo), e sem trilha de quem perguntou | Decisão do cliente, por escrito |
+
+### C. Para rodar fora da máquina do Regis (infra)
+
+| Dependência | O que significa | Por que precisa | Quem |
+|---|---|---|---|
+| **Container/pod no Azure do cliente — P-INFRA** | Onde a API, o gateway e o web vão rodar | Sem ele não há ambiente de teste para o cliente, só demonstração local (D-A43/D-A44) | Cliente (ou CR) |
+| **Segredos no Key Vault** | A chave do Gemini e o segredo do usuário de serviço guardados no cofre, não no `.env` | Em 24-09 o Key Vault estava **vazio**. Hoje a chave do Gemini vem do `.env` local | Cliente/Maurício |
+| **ODBC Driver 18 for SQL Server** | O driver que o `pyodbc` usa para falar com o Warehouse. Agora é instalado pelo `Dockerfile` | Sem ele o container não conecta. ⚠️ O build da imagem ainda não foi testado (sem Docker aqui) | Regis testa o `docker build` |
+| **Chave e cota do Gemini (Q-720)** | A chave de API direta (D-A24) e o orçamento de tokens | Cada pergunta faz até 3 chamadas: classificar, extrair parâmetros e redigir | Cliente |
+
+### D. Pacotes adicionados
+
+| Pacote | Para quê |
+|---|---|
+| `PyJWT[crypto]` (API) | O extra `crypto` instala o `cryptography`, necessário para validar a assinatura RS256 dos tokens do Entra ID |
+| `msodbcsql18`, `unixodbc` (imagem Docker) | O driver ODBC do item C |
+
+### E. Decisões ainda abertas que afetam o código
+
+- **T-SQL × DAX:** os números da OP12 saem de T-SQL sobre as views, com as fórmulas do `AGT_MEDIDA`, e não do modelo semântico (contrato §1). Registrar a decisão e reconciliar com o Power BI (`30_reconciliacao_bi.sql`).
+- **Sinônimos do `AGT_GLOSSARIO`** ainda não entram na normalização de produto (ex.: "LP" = leite em pó).
+- **As outras 21 operações** seguem o mesmo molde da OP12 (`application/operations/`). Cada uma é um arquivo novo registrado em `OPERATION_HANDLERS`.
+
+### Como rodar local (development)
+
+```bash
+# API: .env com LEITESOL_API_ENVIRONMENT=development, LEITESOL_API_BASIC_AUTH_PASSWORD=<hash bcrypt>,
+# LEITESOL_API_JWT_SECRET_KEY, a conexão do Fabric e LEITESOL_API_GEMINI_API_KEY.
+# Para simular um usuário de carteira: LEITESOL_API_LOCAL_USER_FULL_ACCESS=false e
+# LEITESOL_API_LOCAL_USER_EMAIL=<e-mail que existe na RLS_USUARIO_EQUIPE>.
+npm run dev:full
+```

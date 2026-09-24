@@ -1,6 +1,7 @@
 import { startTransition, useRef, useState } from "react";
 
 import type {
+  AgentAnswer,
   BaseResponse,
   ChatAttachment,
   ChatConversation,
@@ -9,12 +10,12 @@ import type {
 } from "@leitesol/contracts";
 
 import {
+  askQuestion,
   createChat,
   getBackendHealth,
   getGatewayHealth,
   getChat,
   listChats,
-  queryChat,
   queryEntity,
   type SqlResult,
 } from "../../../shared/api";
@@ -39,6 +40,18 @@ const buildAttachmentFromFile = (file: File): ChatAttachment => ({
   sizeInBytes: file.size,
   status: "attached",
 });
+
+// Texto da bolha do agente: a narrativa quando houver; senão, a pergunta de
+// volta ao usuário ou uma frase por status do envelope.
+const answerText = (answer: AgentAnswer | null): string => {
+  if (!answer) return "Nenhuma resposta retornada.";
+  if (answer.status === "esclarecimento" && answer.pergunta_ao_usuario) {
+    return answer.pergunta_ao_usuario;
+  }
+  if (answer.narrativa) return answer.narrativa;
+  if (answer.status === "respondida") return "Resultado da consulta:";
+  return "Não foi possível responder a pergunta.";
+};
 
 const toConversationSummary = (conversation: ChatConversation): ChatConversationSummary => {
   const lastMessage = conversation.messages[conversation.messages.length - 1];
@@ -190,8 +203,8 @@ export const useChatWorkspace = () => {
         attachments,
       });
 
-      const chatResponse = await queryChat(command.content);
-      const backendContent = chatResponse.data?.answer ?? "Nenhuma resposta retornada.";
+      const answerResponse = await askQuestion(command.content);
+      const agentAnswer = answerResponse.data ?? null;
 
       const nextMessages = [
         ...currentChat.messages,
@@ -205,10 +218,10 @@ export const useChatWorkspace = () => {
         {
           id: `assistant-${crypto.randomUUID()}`,
           role: "assistant" as const,
-          content: backendContent,
+          content: answerText(agentAnswer),
           createdAt: new Date().toISOString(),
           attachments: null,
-          sqlResult: chatResponse.data?.sqlResult ?? null,
+          agentAnswer,
         },
       ];
 

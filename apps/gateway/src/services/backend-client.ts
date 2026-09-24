@@ -1,4 +1,4 @@
-import type { BaseResponse, HealthStatus, Measure } from "@leitesol/contracts";
+import type { AgentAnswer, BaseResponse, HealthStatus, Measure } from "@leitesol/contracts";
 
 import { env } from "../config/env.js";
 
@@ -139,4 +139,38 @@ export const fetchBackendChatQuery = async (
   const payload = (await response.json().catch(() => null)) as BaseResponse<ChatQueryResponse> | null;
   if (!payload) throw new Error(`Backend unavailable: ${response.status}`);
   return payload;
+};
+
+export const fetchBackendQuestion = async (
+  traceId: string,
+  question: string,
+  authorization?: string,
+): Promise<BaseResponse<AgentAnswer>> => {
+  const response = await fetch(`${env.backendUrl}/perguntas`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-request-id": traceId,
+      ...(authorization ? { authorization } : {}),
+    },
+    body: JSON.stringify({ pergunta: question }),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | BaseResponse<AgentAnswer>
+    | { detail?: unknown }
+    | null;
+  if (!payload) throw new Error(`Backend unavailable: ${response.status}`);
+  if ("statusCode" in payload) return payload;
+  // Erro do FastAPI fora do envelope (ex.: 401 do token): normaliza para o
+  // BaseResponse, senão o gateway responderia sem status.
+  return {
+    data: null,
+    statusCode: response.status,
+    message: typeof payload.detail === "string" ? payload.detail : "Falha no backend.",
+    error: typeof payload.detail === "string" ? payload.detail : "Falha no backend.",
+    success: false,
+    traceId,
+    timestamp: new Date().toISOString(),
+    metadata: null,
+  };
 };

@@ -7,7 +7,7 @@ import {
   getChatConversation,
   listChatConversations,
 } from "../services/mock-chat-service.js";
-import { fetchBackendChatQuery } from "../services/backend-client.js";
+import { fetchBackendChatQuery, fetchBackendQuestion } from "../services/backend-client.js";
 import { createBaseResponse } from "../shared/contracts.js";
 
 export const chatsRouter = Router();
@@ -26,6 +26,29 @@ chatsRouter.post("/chat/query", async (request, response, next) => {
       return;
     }
     const result = await fetchBackendChatQuery(
+      response.locals.traceId,
+      question,
+      request.header("authorization"),
+    );
+    response.status(result.statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+chatsRouter.post("/perguntas", async (request, response, next) => {
+  try {
+    const body = request.body as {
+      pergunta?: unknown;
+      data?: { pergunta?: unknown } | null;
+    };
+    // Mesmo envelope BaseRequest do /chat/query; o formato direto também vale.
+    const question = body.data?.pergunta ?? body.pergunta;
+    if (typeof question !== "string" || !question.trim()) {
+      response.status(400).json({ message: "Pergunta é obrigatória." });
+      return;
+    }
+    const result = await fetchBackendQuestion(
       response.locals.traceId,
       question,
       request.header("authorization"),

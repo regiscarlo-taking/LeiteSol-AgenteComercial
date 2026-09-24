@@ -17,6 +17,9 @@ interface ApiRequestOptions<TResponseData, TRequestData, TRequestMetadata, TResp
   metadata?: TRequestMetadata | null;
   headers?: HeadersInit;
   errorMessage: string;
+  // Tentativas extras em caso de falha. Use 0 em chamada que custa tokens
+  // de LLM: repetir uma pergunta ao agente é pagar por ela de novo.
+  retries?: number;
 }
 
 const createTraceId = (): string => {
@@ -80,6 +83,7 @@ export const requestApi = async <
   metadata = null,
   headers,
   errorMessage,
+  retries = 3,
 }: ApiRequestOptions<TResponseData, TRequestData, TRequestMetadata, TResponseMetadata>): Promise<
   BaseResponse<TResponseData, TResponseMetadata>
 > => {
@@ -114,5 +118,5 @@ export const requestApi = async <
     }
 
     return payload;
-  });
+  }, retries);
 };

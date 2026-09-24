@@ -57,6 +57,56 @@ export interface ChatSqlResult {
   rowCount: number;
 }
 
+// Envelope do POST /perguntas (contrato de dados, §6). Os nomes seguem o
+// contrato em snake_case porque é o formato que a API devolve.
+export type AgentAnswerStatus =
+  | "respondida"
+  | "esclarecimento"
+  | "fora_de_escopo"
+  | "sem_alcada"
+  | "erro";
+
+export interface AgentAnswerColumn {
+  id: string;
+  rotulo: string;
+  unidade: string | null;
+}
+
+export interface AgentAnswerBlock {
+  colunas: AgentAnswerColumn[];
+  linhas: Array<Record<string, unknown>>;
+}
+
+export interface AgentAnswerNotice {
+  codigo: string;
+  origem: string;
+  texto: string;
+}
+
+export interface AgentAnswer {
+  correlation_id: string;
+  status: AgentAnswerStatus;
+  operacao: { id: string; nome_tecnico: string; skill: string } | null;
+  parametros_interpretados: Record<string, unknown>;
+  periodo: {
+    inicio: string;
+    fim_exclusivo: string;
+    fim_exibicao: string;
+    comparacao: { inicio: string; fim_exclusivo: string } | null;
+    periodo_parcial: boolean;
+    ultima_competencia_fechada: string | null;
+  } | null;
+  recorte: { tipo: string; descricao: string } | null;
+  dados: {
+    principal: AgentAnswerBlock;
+    excecoes: Array<{ motivo: string; linhas: Array<Record<string, unknown>> }>;
+  } | null;
+  avisos: AgentAnswerNotice[];
+  cobertura: unknown;
+  narrativa: string | null;
+  pergunta_ao_usuario: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -64,6 +114,7 @@ export interface ChatMessage {
   createdAt: string;
   attachments?: ChatAttachment[] | null;
   sqlResult?: ChatSqlResult | null;
+  agentAnswer?: AgentAnswer | null;
 }
 
 export interface ChatConversationSummary {

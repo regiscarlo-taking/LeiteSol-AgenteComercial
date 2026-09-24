@@ -1,4 +1,10 @@
-import type { BaseResponse, ChatSqlResult, HealthStatus, Measure } from "@leitesol/contracts";
+import type {
+  AgentAnswer,
+  BaseResponse,
+  ChatSqlResult,
+  HealthStatus,
+  Measure,
+} from "@leitesol/contracts";
 import type {
   ChatAttachment,
   ChatConversation,
@@ -46,6 +52,18 @@ export const queryChat = async (question: string): Promise<BaseResponse<ChatQuer
     },
     data: { question },
     errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
+  });
+
+export const askQuestion = async (question: string): Promise<BaseResponse<AgentAnswer>> =>
+  requestApi<AgentAnswer, { pergunta: string }>({
+    url: "/api/perguntas",
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("leitesol_access_token") ?? ""}`,
+    },
+    data: { pergunta: question },
+    errorMessage: "Não foi possível responder a pergunta agora.",
+    retries: 0,
   });
 
 export const getGatewayHealth = async (): Promise<BaseResponse<HealthStatus>> =>
