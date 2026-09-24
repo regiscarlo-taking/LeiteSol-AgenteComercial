@@ -16,6 +16,9 @@ class GeminiError(RuntimeError):
 class GeminiPlan:
     entity: str
     answer: str
+    limit: int
+    order_by: str | None
+    order_direction: str | None
 
 
 class GeminiClient:
@@ -25,37 +28,93 @@ class GeminiClient:
         self._api_key = api_key
         self._model = model
 
-    def plan_query(self, question: str) -> GeminiPlan:
+    def select_entity(self, question: str) -> str:
         entities = ", ".join(entity.name for entity in CATALOG_ENTITIES)
         prompt = (
-            "You are a SQL query planner for LeiteSol. Return only valid JSON with keys "
-            "entity and answer. Choose exactly one entity from this allowlist: "
-            f"{entities}. The answer must be a concise Portuguese explanation. "
+            "You are a data catalog router for LeiteSol. Return only valid JSON with the "
+            "key entity. Choose exactly one entity from this allowlist: "
+            f"{entities}. "
             f"User question: {question}"
         )
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self._model}:generateContent?key={self._api_key}"
+        plan = self._generate_json(prompt)
+        entity = plan.get("entity")
+        if not isinstance(entity, str):
+            raise GeminiError("Gemini returned an invalid entity selection.")
+        if entity.lower() not in {item.name for item in CATALOG_ENTITIES}:
+            raise GeminiError("Gemini selected an entity outside the allowlist.")
+        return entity.lower()
+
+    def plan_query(self, question: str, *, entity: str, columns: list[str]) -> GeminiPlan:
+        if not columns:
+            raise GeminiError("The selected entity has no columns available for querying.")
+
+        column_list = ", ".join(columns)
+        prompt = (
+            "You are a safe SQL query planner for LeiteSol. Return only valid JSON with "
+            "these keys: entity, answer, limit, orderBy and orderDirection. "
+            f"The selected entity is {entity}. Its only valid columns are: {column_list}. "
+            "entity must be exactly the selected entity. limit must be an integer from 1 to 100. "
+            "orderBy must be one of the valid columns or null. "
+            "orderDirection must be ASC, DESC or null. "
+            "For requests for latest, last or most recent records, choose a date, timestamp or "
+            "incremental "
+            "identifier column when one exists and use DESC. Never invent columns or SQL. "
+            "answer must be a concise Portuguese explanation of the planned query. "
+            f"User question: {question}"
         )
+        plan = self._generate_json(prompt)
+        selected_entity = plan.get("entity")
+        answer = plan.get("answer")
+        limit = plan.get("limit")
+        order_by = plan.get("orderBy")
+        order_direction = plan.get("orderDirection")
+
+        if selected_entity != entity or not isinstance(answer, str) or not isinstance(limit, int):
+            raise GeminiError("Gemini returned an invalid query plan.")
+        if not 1 <= limit <= 100:
+            raise GeminiError("Gemini returned a query limit outside the allowed range.")
+        if order_by is not None and (not isinstance(order_by, str) or order_by not in columns):
+            raise GeminiError("Gemini selected an invalid ordering column.")
+        if order_direction is not None and order_direction not in {"ASC", "DESC"}:
+            raise GeminiError("Gemini selected an invalid ordering direction.")
+        if order_by is None:
+            order_direction = None
+        elif order_direction is None:
+            order_direction = "ASC"
+
+        return GeminiPlan(
+            entity=entity,
+            answer=answer,
+            limit=limit,
+            order_by=order_by,
+            order_direction=order_direction,
+        )
+
+    def _generate_json(self, prompt: str) -> dict[str, object]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:generateContent"
         try:
             response = httpx.post(
                 url,
-                json={"contents": [{"parts": [{"text": prompt}]}]},
+                headers={"x-goog-api-key": self._api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseMimeType": "application/json"},
+                },
                 timeout=30.0,
             )
             response.raise_for_status()
             text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-            plan = json.loads(text.strip().removeprefix("```json").removesuffix("```").strip())
-        except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError) as error:
+            result = json.loads(text.strip().removeprefix("```json").removesuffix("```").strip())
+        except httpx.HTTPStatusError as error:
+            raise GeminiError(
+                f"Gemini request failed with status {error.response.status_code}."
+            ) from error
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
             raise GeminiError("Gemini could not create a query plan.") from error
 
-        entity = plan.get("entity")
-        answer = plan.get("answer")
-        if not isinstance(entity, str) or not isinstance(answer, str):
-            raise GeminiError("Gemini returned an invalid query plan.")
-        if entity.lower() not in {item.name for item in CATALOG_ENTITIES}:
-            raise GeminiError("Gemini selected an entity outside the allowlist.")
-        return GeminiPlan(entity=entity.lower(), answer=answer)
+        if not isinstance(result, dict):
+            raise GeminiError("Gemini returned a non-object JSON response.")
+        return result
 
 
 def get_gemini_client() -> GeminiClient:

@@ -18,10 +18,14 @@ fabricRouter.get("/fabric/measures", async (request, response, next) => {
 
 fabricRouter.post("/fabric/query", async (request, response, next) => {
   try {
-    const { entity, limit = 100 } = request.body as {
+    const body = request.body as {
       entity?: unknown;
       limit?: unknown;
+      data?: { entity?: unknown; limit?: unknown } | null;
     };
+    // Requests coming from the React client are wrapped in BaseRequest.
+    const entity = body.data?.entity ?? body.entity;
+    const limit = body.data?.limit ?? body.limit ?? 100;
 
     if (typeof entity !== "string" || entity.trim().length === 0) {
       response.status(400).json({ message: "Entity é obrigatória." });

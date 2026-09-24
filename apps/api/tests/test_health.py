@@ -1,12 +1,17 @@
-from fastapi.testclient import TestClient
+import asyncio
 
+import httpx
 from leitesol_api.main import app
 
 
-def test_read_health() -> None:
-    client = TestClient(app)
+async def get_response(path: str) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+        return await client.get(path)
 
-    response = client.get("/health")
+
+def test_read_health() -> None:
+    response = asyncio.run(get_response("/health"))
 
     assert response.status_code == 200
     payload = response.json()
@@ -21,11 +26,13 @@ def test_read_health() -> None:
 
 
 def test_liveness_health_middleware() -> None:
-    client = TestClient(app)
-
-    response = client.get("/health/live")
+    response = asyncio.run(get_response("/health/live"))
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["data"]["status"] == "healthy"
     assert payload["statusCode"] == 200
+
+
+def test_key_vault_secret_route_is_not_public() -> None:
+    assert "/azure/key-vault/secrets/{secret_name}" not in app.openapi()["paths"]

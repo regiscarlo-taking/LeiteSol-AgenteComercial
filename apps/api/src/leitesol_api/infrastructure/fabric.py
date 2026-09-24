@@ -1,5 +1,5 @@
-from collections.abc import Mapping
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from leitesol_api.domain.measure import Measure
@@ -142,27 +142,25 @@ class FabricSqlConnection:
                 cursor = connection.cursor()
                 cursor.execute(query)
                 columns = [column[0] for column in cursor.description]
-                return [self._to_measure(dict(zip(columns, row))) for row in cursor.fetchall()]
+                return [
+                    self._to_measure(dict(zip(columns, row, strict=True)))
+                    for row in cursor.fetchall()
+                ]
         except Exception as error:
             logger.exception(
                 "Fabric query failed database=%s table=IA_COMERCIAL.AGT_MEDIDA",
                 self._database,
             )
-            raise FabricConnectionError("Unable to query measures from the Fabric warehouse.") from error
+            raise FabricConnectionError(
+                "Unable to query measures from the Fabric warehouse."
+            ) from error
 
     def list_entities(self) -> list[CatalogEntity]:
         return list(CATALOG_ENTITIES)
 
-    def query_entity(self, entity: str, limit: int = 100) -> SqlResult:
-        selected_entity = ENTITY_BY_NAME.get(entity.strip().lower())
-        if selected_entity is None:
-            raise EntityNotAllowedError(f"Entity is not allowed: {entity}")
-
-        bounded_limit = min(max(limit, 1), 100)
-        sql = (
-            f"SELECT TOP {bounded_limit} * "
-            f"FROM {selected_entity.qualified_name}"
-        )
+    def describe_entity(self, entity: str) -> list[str]:
+        selected_entity = self._get_entity(entity)
+        sql = f"SELECT TOP 0 * FROM {selected_entity.qualified_name}"
 
         try:
             import pyodbc
@@ -170,11 +168,49 @@ class FabricSqlConnection:
             with pyodbc.connect(self._connection_string(), timeout=self._timeout) as connection:
                 cursor = connection.cursor()
                 cursor.execute(sql)
+                return [column[0] for column in cursor.description]
+        except Exception as error:
+            logger.exception(
+                "Fabric entity metadata lookup failed database=%s entity=%s",
+                self._database,
+                selected_entity.name,
+            )
+            raise FabricConnectionError("Unable to inspect the Fabric entity.") from error
+
+    def query_entity(
+        self,
+        entity: str,
+        limit: int = 100,
+        order_by: str | None = None,
+        order_direction: str | None = None,
+    ) -> SqlResult:
+        selected_entity = self._get_entity(entity)
+        bounded_limit = min(max(limit, 1), 100)
+
+        try:
+            import pyodbc
+
+            with pyodbc.connect(self._connection_string(), timeout=self._timeout) as connection:
+                cursor = connection.cursor()
+                available_columns = self._get_columns(cursor, selected_entity)
+                sql = self._build_entity_query(
+                    selected_entity,
+                    bounded_limit,
+                    order_by,
+                    order_direction,
+                    available_columns,
+                )
+                cursor.execute(sql)
                 columns = [column[0] for column in cursor.description]
                 rows = [
-                    {column: self._json_value(value) for column, value in zip(columns, row)}
+                    {
+                        column: self._json_value(value)
+                        for column, value in zip(columns, row, strict=True)
+                    }
                     for row in cursor.fetchall()
                 ]
+        except EntityNotAllowedError:
+            raise
         except Exception as error:
             logger.exception(
                 "Fabric entity query failed database=%s entity=%s",
@@ -190,6 +226,38 @@ class FabricSqlConnection:
             rows=rows,
             row_count=len(rows),
         )
+
+    @staticmethod
+    def _get_entity(entity: str) -> CatalogEntity:
+        selected_entity = ENTITY_BY_NAME.get(entity.strip().lower())
+        if selected_entity is None:
+            raise EntityNotAllowedError(f"Entity is not allowed: {entity}")
+        return selected_entity
+
+    @staticmethod
+    def _get_columns(cursor: Any, entity: CatalogEntity) -> dict[str, str]:
+        cursor.execute(f"SELECT TOP 0 * FROM {entity.qualified_name}")
+        return {column[0].casefold(): column[0] for column in cursor.description}
+
+    @staticmethod
+    def _build_entity_query(
+        entity: CatalogEntity,
+        limit: int,
+        order_by: str | None,
+        order_direction: str | None,
+        available_columns: dict[str, str],
+    ) -> str:
+        sql = f"SELECT TOP {limit} * FROM {entity.qualified_name}"
+        if order_by is None:
+            return sql
+
+        column = available_columns.get(order_by.casefold())
+        if column is None:
+            raise EntityNotAllowedError(f"Ordering column is not available: {order_by}")
+        direction = (order_direction or "ASC").upper()
+        if direction not in {"ASC", "DESC"}:
+            raise EntityNotAllowedError(f"Ordering direction is not allowed: {order_direction}")
+        return f"{sql} ORDER BY [{column.replace(']', ']]')}] {direction}"
 
     @staticmethod
     def _json_value(value: Any) -> Any:

@@ -14,7 +14,13 @@ export const chatsRouter = Router();
 
 chatsRouter.post("/chat/query", async (request, response, next) => {
   try {
-    const { question } = request.body as { question?: unknown };
+    const body = request.body as {
+      question?: unknown;
+      data?: { question?: unknown } | null;
+    };
+    // The web client uses the shared BaseRequest envelope. Accepting the
+    // unwrapped shape too keeps this BFF convenient for API clients.
+    const question = body.data?.question ?? body.question;
     if (typeof question !== "string" || !question.trim()) {
       response.status(400).json({ message: "Question is required." });
       return;

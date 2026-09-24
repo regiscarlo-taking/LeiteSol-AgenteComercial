@@ -208,6 +208,7 @@ export const useChatWorkspace = () => {
           content: backendContent,
           createdAt: new Date().toISOString(),
           attachments: null,
+          sqlResult: chatResponse.data?.sqlResult ?? null,
         },
       ];
 

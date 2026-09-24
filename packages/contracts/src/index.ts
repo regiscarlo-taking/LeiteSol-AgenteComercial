@@ -49,12 +49,21 @@ export interface ChatAttachment {
   status: ChatAttachmentStatus;
 }
 
+export interface ChatSqlResult {
+  entity: string;
+  sql: string;
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  rowCount: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   createdAt: string;
   attachments?: ChatAttachment[] | null;
+  sqlResult?: ChatSqlResult | null;
 }
 
 export interface ChatConversationSummary {

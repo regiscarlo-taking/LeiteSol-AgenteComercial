@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     key_vault_url: str = ""
     gemini_api_key_secret_name: str = "GEMINI-API-KEY"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     storage_account_url: str = ""
     storage_container_name: str = ""
     storage_blob_prefix: str = ""

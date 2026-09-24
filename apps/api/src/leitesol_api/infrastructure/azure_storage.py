@@ -2,7 +2,8 @@ from collections.abc import Iterator
 from functools import lru_cache
 from typing import TYPE_CHECKING, BinaryIO
 
-from azure.identity import DefaultAzureCredential
+from azure.core.credentials import TokenCredential
+from azure.identity import ChainedTokenCredential, ClientSecretCredential, DefaultAzureCredential
 
 if TYPE_CHECKING:
     from azure.storage.blob import BlobClient
@@ -15,7 +16,7 @@ class AzureConfigurationError(RuntimeError):
 
 
 class KeyVaultSecretProvider:
-    def __init__(self, *, vault_url: str, credential: DefaultAzureCredential) -> None:
+    def __init__(self, *, vault_url: str, credential: TokenCredential) -> None:
         if not vault_url:
             raise AzureConfigurationError("LEITESOL_API_KEY_VAULT_URL is not configured.")
         from azure.keyvault.secrets import SecretClient
@@ -37,7 +38,7 @@ class BlobStorageGateway:
         *,
         account_url: str,
         container_name: str,
-        credential: DefaultAzureCredential,
+        credential: TokenCredential,
         blob_prefix: str = "",
     ) -> None:
         if not account_url:
@@ -86,8 +87,24 @@ class BlobStorageGateway:
 
 
 @lru_cache(maxsize=1)
-def get_azure_credential() -> DefaultAzureCredential:
-    return DefaultAzureCredential()
+def get_azure_credential() -> TokenCredential:
+    """Use the configured service principal and fall back to Azure credentials.
+
+    The explicit credential is first because an expired Azure CLI session makes
+    DefaultAzureCredential stop its own chain. Managed Identity remains the
+    fallback for deployments without LEITESOL_API_ENTRA_* values.
+    """
+    settings = get_settings()
+    default_credential = DefaultAzureCredential()
+    if not all((settings.entra_tenant_id, settings.entra_client_id, settings.entra_client_secret)):
+        return default_credential
+
+    service_principal_credential = ClientSecretCredential(
+        tenant_id=settings.entra_tenant_id,
+        client_id=settings.entra_client_id,
+        client_secret=settings.entra_client_secret.replace("$$", "$"),
+    )
+    return ChainedTokenCredential(service_principal_credential, default_credential)
 
 
 @lru_cache(maxsize=1)

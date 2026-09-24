@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from leitesol_api.infrastructure.auth import verify_token
-from leitesol_api.infrastructure.fabric import FabricConnectionError, FabricSqlConnection
+from leitesol_api.infrastructure.fabric import (
+    EntityNotAllowedError,
+    FabricConnectionError,
+    FabricSqlConnection,
+)
 from leitesol_api.infrastructure.gemini import GeminiError, get_gemini_client
 from leitesol_api.infrastructure.settings import get_settings
 from leitesol_api.interfaces.responses import build_response_payload
@@ -12,10 +16,12 @@ router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(verify_t
 
 
 @router.post("/query", response_model=BaseResponse[ChatQueryResponse, dict])
-def query_chat(question: ChatQueryRequest, request: Request) -> BaseResponse[ChatQueryResponse, dict] | JSONResponse:
+def query_chat(
+    question: ChatQueryRequest,
+    request: Request,
+) -> BaseResponse[ChatQueryResponse, dict] | JSONResponse:
     settings = get_settings()
     try:
-        plan = get_gemini_client().plan_query(question.question)
         repository = FabricSqlConnection(
             server=settings.fabric_server,
             database=settings.fabric_database,
@@ -26,17 +32,37 @@ def query_chat(question: ChatQueryRequest, request: Request) -> BaseResponse[Cha
             client_secret=settings.entra_client_secret,
             timeout=settings.fabric_connection_timeout,
         )
-        result = repository.query_entity(plan.entity)
+        gemini = get_gemini_client()
+        entity = gemini.select_entity(question.question)
+        columns = repository.describe_entity(entity)
+        plan = gemini.plan_query(question.question, entity=entity, columns=columns)
+        result = repository.query_entity(
+            plan.entity,
+            limit=plan.limit,
+            order_by=plan.order_by,
+            order_direction=plan.order_direction,
+        )
     except GeminiError as error:
         return JSONResponse(status_code=503, content=build_response_payload(
             data=None, message="Gemini is unavailable.", error=str(error), status_code=503,
             trace_id=getattr(request.state, "request_id", None),
         ))
-    except FabricConnectionError as error:
-        return JSONResponse(status_code=503, content=build_response_payload(
-            data=None, message="Fabric warehouse is unavailable.", error=str(error), status_code=503,
+    except EntityNotAllowedError as error:
+        return JSONResponse(status_code=400, content=build_response_payload(
+            data=None, message="Query plan is not allowed.", error=str(error), status_code=400,
             trace_id=getattr(request.state, "request_id", None),
         ))
+    except FabricConnectionError as error:
+        return JSONResponse(
+            status_code=503,
+            content=build_response_payload(
+                data=None,
+                message="Fabric warehouse is unavailable.",
+                error=str(error),
+                status_code=503,
+                trace_id=getattr(request.state, "request_id", None),
+            ),
+        )
 
     payload = build_response_payload(
         data={

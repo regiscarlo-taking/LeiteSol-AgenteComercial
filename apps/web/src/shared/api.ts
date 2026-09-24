@@ -1,4 +1,4 @@
-import type { BaseResponse, HealthStatus, Measure } from "@leitesol/contracts";
+import type { BaseResponse, ChatSqlResult, HealthStatus, Measure } from "@leitesol/contracts";
 import type {
   ChatAttachment,
   ChatConversation,
@@ -16,13 +16,7 @@ export interface AuthToken {
   expires_in: number;
 }
 
-export interface SqlResult {
-  entity: string;
-  sql: string;
-  columns: string[];
-  rows: Array<Record<string, unknown>>;
-  rowCount: number;
-}
+export type SqlResult = ChatSqlResult;
 
 export interface ChatQueryResult {
   answer: string;

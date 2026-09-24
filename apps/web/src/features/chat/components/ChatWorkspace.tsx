@@ -159,6 +159,27 @@ export const ChatWorkspace = () => {
                       ))}
                     </div>
                   ) : null}
+
+                  {message.sqlResult ? (
+                    <section className="query-result">
+                      <code>{message.sqlResult.sql}</code>
+                      <div className="result-table-wrap">
+                        <table>
+                          <thead>
+                            <tr>{message.sqlResult.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+                          </thead>
+                          <tbody>
+                            {message.sqlResult.rows.map((row, index) => (
+                              <tr key={`${message.sqlResult?.entity}-${index}`}>
+                                {message.sqlResult?.columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <small>{message.sqlResult.rowCount} linhas retornadas</small>
+                    </section>
+                  ) : null}
                 </article>
               ))}
             </div>
