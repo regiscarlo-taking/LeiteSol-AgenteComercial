@@ -27,17 +27,44 @@ def _parse_date(value: Any) -> date | None:
         return value
     if not isinstance(value, str):
         return None
+    text = value.strip()
+    # Parâmetro de competência vem como AAAA-MM: vale o primeiro dia do mês.
+    if len(text) == 7:
+        text = f"{text}-01"
     try:
-        return date.fromisoformat(value.strip()[:10])
+        return date.fromisoformat(text[:10])
     except ValueError:
         return None
 
 
+def _parse_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = int(str(value).strip())
+    except ValueError:
+        return None
+    return number if number > 0 else None
+
+
+def _parse_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().upper()
+    if text in {"S", "SIM", "TRUE", "1"}:
+        return True
+    if text in {"N", "NAO", "NÃO", "FALSE", "0"}:
+        return False
+    return None
+
+
 def _missing_question(parameter: Parameter) -> str:
     description = parameter.description or parameter.name
-    if parameter.kind == "date":
+    if parameter.kind == "date" and (parameter.domain or "").startswith("AAAA-MM-DD"):
         # Mesma pergunta para início e fim: sai uma vez só na deduplicação.
         return "Qual período você quer consultar? Informe o mês/ano de início e de fim."
+    if parameter.kind == "date":
+        return "Qual mês você quer analisar? Informe o mês e o ano."
     if parameter.enum_values:
         return f"{description}: escolha entre {', '.join(parameter.enum_values)}."
     return f"Informe {description.lower()}."
@@ -55,8 +82,9 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
                 result.questions.append(_missing_question(parameter))
                 continue
             if parameter.default:
-                result.values[parameter.name] = parameter.default
-            continue
+                value = parameter.default
+            else:
+                continue
 
         if parameter.kind == "date":
             parsed = _parse_date(value)
@@ -70,6 +98,18 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
                 result.questions.append(_missing_question(parameter))
                 continue
             result.values[parameter.name] = normalized
+        elif parameter.kind == "int":
+            number = _parse_int(value)
+            if number is None:
+                result.questions.append(_missing_question(parameter))
+                continue
+            result.values[parameter.name] = number
+        elif parameter.kind == "bool":
+            flag = _parse_bool(value)
+            if flag is None:
+                result.questions.append(_missing_question(parameter))
+                continue
+            result.values[parameter.name] = flag
         else:
             result.values[parameter.name] = str(value)
 

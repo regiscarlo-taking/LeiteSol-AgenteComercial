@@ -218,3 +218,34 @@ O código desta branch está pronto e testado com banco e LLM simulados. Para re
 # LEITESOL_API_LOCAL_USER_EMAIL=<e-mail que existe na RLS_USUARIO_EQUIPE>.
 npm run dev:full
 ```
+
+---
+
+## Branch `dev/agente-operacoes` (24-09)
+
+Criada a partir de `analise/revisao-24-09`, com merge da `master` (`2927a3a`, ajustes do Regis no gateway e na tela). Nos conflitos, prevaleceu o nosso lado. Um ajuste foi necessário depois: a `master` tirou da tela os painéis "Usuário" e "Consultar entidade", o merge manteve o JSX deles e a tela parou de compilar. A tela segue a `master` nesse ponto e mantém o `/perguntas`.
+
+### Operações implementadas
+
+| Pergunta | Operação | O que a resposta traz |
+|---|---|---|
+| Clientes que voltaram a comprar depois de N meses sem compra | OP01 | Clientes com compra válida no mês e **nenhum mês** com compra válida na janela anterior (verificado mês a mês, não pela soma). Primeira compra do cadastro só informativa |
+| Comparar com o mesmo período do ano anterior | OP12 | (já existia; agora usa o módulo comum) |
+| Maiores clientes | OP13 | Ranking com `RANK()`: **empate no limite fica visível**. Participante por cliente+loja, CNPJ ou rede; UF (ou "Várias"); FAT KG, TONS e R$; participação no total do recorte |
+| Evolução dos últimos 12 meses | OP17 | Série de 12 competências **fechadas**; mês sem venda = zero; variação mensal. Tabela, sem gráfico |
+| Vendedores em queda contra a média de 3 meses | OP18 | Média individual = soma dos 3 meses ÷ 3 (mês sem venda conta zero); situação **por métrica** (R$ e KG separados); média zero vai para exceções |
+
+- **Módulo comum** (`application/operations/common.py`): universo (Produto Acabado, sem exterior, carteira), filtros opcionais (UF, município, segmento, vendedor, cliente/rede/CNPJ, cliente+loja, rede, produto), calendário (último mês fechado, mês aberto) e arredondamento. As cinco operações respondem sobre o mesmo universo.
+- **Parâmetros:** a validação aceita `int`, `bool` e mês no formato AAAA-MM, como pedem as operações novas.
+
+### Verificado
+
+- **56 testes da API.** O fetcher de teste confere, em toda consulta, que o número de `?` é igual ao número de parâmetros.
+- O SQL das cinco operações passa num parser T-SQL.
+- ⚠️ **Nada rodado ainda contra o Warehouse real.**
+
+### Pendente nestas operações
+
+- **OP18:** o catálogo pede que o vendedor elegível **sem nenhuma venda** na janela apareça sinalizado. Hoje só aparece quem vendeu em algum dos quatro meses, e a resposta avisa isso.
+- **OP13:** a participação usa a métrica do ranking; com total do recorte não positivo, ela não é calculada e a resposta avisa.
+- **OP17:** o parâmetro `tipo_visao` (representante × carteira do gestor) ainda não muda a atribuição.

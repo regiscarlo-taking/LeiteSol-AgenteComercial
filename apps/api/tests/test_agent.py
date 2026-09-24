@@ -210,7 +210,8 @@ def test_missing_parameter_becomes_clarification() -> None:
 def test_answered_envelope_follows_contract() -> None:
     fetcher = FakeFetcher(
         [
-            [{"UltimaFechada": datetime(2026, 8, 1), "TemParcial": 0}],
+            [{"UltimaFechada": datetime(2026, 8, 1)}],
+            [{"TemParcial": 0}],
             [{"fat_rs_atual": 200.0, "fat_rs_anterior": 100.0, "fat_kg_atual": 20.0, "fat_kg_anterior": 10.0}],
         ]
     )

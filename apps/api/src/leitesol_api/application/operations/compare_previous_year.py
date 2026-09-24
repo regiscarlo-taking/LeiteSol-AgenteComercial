@@ -11,7 +11,6 @@ vendas + bonificação - devoluções; FAT TONS = FAT KG / 1000.
 
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from leitesol_api.application.operations.base import (
@@ -20,12 +19,22 @@ from leitesol_api.application.operations.base import (
     add_years,
     month_end_exclusive,
     month_start,
-    normalize_term,
+)
+from leitesol_api.application.operations.common import (
+    FAT_KG,
+    FAT_RS,
+    HISTORY_START,
+    METRICS,
+    UNIVERSE_FROM,
+    has_open_month,
+    last_closed_month,
+    metric_value,
+    product_filter,
+    product_question,
+    universe_where,
 )
 from leitesol_api.domain.agent import Notice, Period, Scope
 
-# Início da base histórica da vw_fato_faturamento (Data >= 2025-01-01).
-HISTORY_START = date(2025, 1, 1)
 MAX_ROWS = 50
 
 # granularidade -> colunas (expressão SQL, id da coluna, rótulo). A UF do
@@ -50,48 +59,11 @@ GRANULARITY_COLUMNS: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
 }
 
-METRICS = {
-    "fat_rs": ("FAT R$", "R$"),
-    "fat_kg": ("FAT KG", "KG"),
-    "fat_tons": ("FAT TONS", "t"),
-}
-
-CALENDAR_SQL = """
-    SELECT
-        MAX(CASE WHEN MesFechado = 1 THEN Data END) AS UltimaFechada,
-        MAX(CASE WHEN Data >= ? AND Data < ? AND MesFechado = 0 THEN 1 ELSE 0 END) AS TemParcial
-    FROM [IA_COMERCIAL].[vw_dim_calendario]
-"""
-
-PRODUCT_TERMS_SQL = """
-    SELECT DISTINCT TermoNormalizado
-    FROM [IA_COMERCIAL].[vw_produto_termo]
-    WHERE TermoNormalizado IN ({placeholders})
-"""
-
-PRODUCT_TREE_SQL = """
-    SELECT TOP 1 1 AS Existe
-    FROM [IA_COMERCIAL].[vw_dim_produto]
-    WHERE UPPER(Familia) = ? OR UPPER(Grupamento) = ? OR UPPER(Subtotal) = ?
-"""
-
-STOPWORDS = frozenset({"DE", "DO", "DA", "DOS", "DAS", "EM", "E", "O", "A"})
-
-
 @dataclass(slots=True)
 class QueryPlan:
     sql: str
     params: list[Any] = field(default_factory=list)
     columns: tuple[tuple[str, str, str], ...] = ()
-
-
-def _round_money(value: float) -> float:
-    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-
-
-def _round_kg(value: float) -> int:
-    # RT16: KG sem casas decimais, 0,5 sobe - para bater com o painel.
-    return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def resolve_period(values: dict[str, Any]) -> tuple[Period, bool]:
@@ -117,39 +89,11 @@ def resolve_period(values: dict[str, Any]) -> tuple[Period, bool]:
     )
 
 
-def product_filter(fetcher: SqlFetcher, text: str) -> tuple[str, list[Any]] | None:
-    """Filtro de produto por lista fechada (RT35). None = termo fora da lista."""
-    node = normalize_term(text)
-    if fetcher.fetch(PRODUCT_TREE_SQL, (node, node, node)):
-        return "(UPPER(p.Familia) = ? OR UPPER(p.Grupamento) = ? OR UPPER(p.Subtotal) = ?)", [
-            node,
-            node,
-            node,
-        ]
-
-    terms = sorted({term for term in node.split() if term not in STOPWORDS})
-    if not terms:
-        return None
-    placeholders = ", ".join("?" for _ in terms)
-    known = {
-        row["TermoNormalizado"]
-        for row in fetcher.fetch(PRODUCT_TERMS_SQL.format(placeholders=placeholders), tuple(terms))
-    }
-    if set(terms) - known:
-        return None
-    return (
-        "p.ProdutoId IN (SELECT t.ProdutoId FROM [IA_COMERCIAL].[vw_produto_termo] t "
-        f"WHERE t.TermoNormalizado IN ({placeholders}) "
-        "GROUP BY t.ProdutoId HAVING COUNT(DISTINCT t.TermoNormalizado) = ?)",
-        [*terms, len(terms)],
-    )
-
-
 def build_query(
     values: dict[str, Any],
     period: Period,
     scope: Scope,
-    extra_filters: list[tuple[str, list[Any]]] | None = None,
+    product: tuple[str, list[Any]] | None = None,
 ) -> QueryPlan:
     granularity = values.get("granularidade") or "total"
     columns = GRANULARITY_COLUMNS.get(granularity, ())
@@ -160,21 +104,18 @@ def build_query(
     previous = "f.Data >= ? AND f.Data < ?"
     current_params = [period.start, period.end_exclusive]
     previous_params = [period.comparison_start, period.comparison_end_exclusive]
+    where = universe_where(values, scope, product)
 
     sql = f"""
         SELECT {select_dims}
-            SUM(CASE WHEN {current} THEN f.Vendas_R - f.Dev_R ELSE 0 END) AS fat_rs_atual,
-            SUM(CASE WHEN {previous} THEN f.Vendas_R - f.Dev_R ELSE 0 END) AS fat_rs_anterior,
-            SUM(CASE WHEN {current} THEN f.Vendas_Kg + f.Bonif_Kg - f.Dev_Kg ELSE 0 END) AS fat_kg_atual,
-            SUM(CASE WHEN {previous} THEN f.Vendas_Kg + f.Bonif_Kg - f.Dev_Kg ELSE 0 END) AS fat_kg_anterior
-        FROM [IA_COMERCIAL].[vw_fato_faturamento] f
-        JOIN [IA_COMERCIAL].[vw_dim_produto] p ON p.ProdutoId = f.ProdutoId
-        JOIN [IA_COMERCIAL].[vw_dim_cliente] c ON c.ClienteId = f.ClienteId
-        LEFT JOIN [IA_COMERCIAL].[vw_dim_representante] r ON r.RepresentanteId = f.VendedorId
+            SUM(CASE WHEN {current} THEN {FAT_RS} ELSE 0 END) AS fat_rs_atual,
+            SUM(CASE WHEN {previous} THEN {FAT_RS} ELSE 0 END) AS fat_rs_anterior,
+            SUM(CASE WHEN {current} THEN {FAT_KG} ELSE 0 END) AS fat_kg_atual,
+            SUM(CASE WHEN {previous} THEN {FAT_KG} ELSE 0 END) AS fat_kg_anterior
+        {UNIVERSE_FROM}
         WHERE (({current}) OR ({previous}))
-          AND p.FlagProdutoAcabado = 1
-          AND c.FlagExterior = 0
-    """
+{where.sql}"""
+    # Ordem dos parâmetros = ordem dos ? no texto: SELECT (4 janelas), WHERE, filtros.
     params: list[Any] = [
         *current_params,
         *previous_params,
@@ -182,50 +123,11 @@ def build_query(
         *previous_params,
         *current_params,
         *previous_params,
+        *where.params,
     ]
-
-    if not scope.sees_everything:
-        sellers = sorted(scope.sellers)
-        sql += f"  AND f.VendedorId IN ({', '.join('?' for _ in sellers)})\n"
-        params.extend(sellers)
-
-    if values.get("uf"):
-        sql += "  AND c.UF = ?\n"
-        params.append(values["uf"].strip().upper())
-    if values.get("municipio"):
-        sql += "  AND UPPER(c.Municipio) = ?\n"
-        params.append(normalize_term(values["municipio"]))
-    if values.get("segmento"):
-        sql += "  AND (c.SegmentoCodigo = ? OR UPPER(c.SegmentoDescricao) = ?)\n"
-        params.extend([values["segmento"].strip(), normalize_term(values["segmento"])])
-    if values.get("vendedor_rca"):
-        sql += "  AND (f.VendedorId = ? OR UPPER(r.Representante) = ?)\n"
-        params.extend([values["vendedor_rca"].strip(), normalize_term(values["vendedor_rca"])])
-    if values.get("cliente_rede"):
-        clause, clause_params = client_filter(values["cliente_rede"])
-        sql += f"  AND {clause}\n"
-        params.extend(clause_params)
-    for clause, clause_params in extra_filters or []:
-        sql += f"  AND {clause}\n"
-        params.extend(clause_params)
-
     if group_by:
         sql += f"GROUP BY {group_by}\n"
     return QueryPlan(sql=sql, params=params, columns=columns)
-
-
-def client_filter(text: str) -> tuple[str, list[Any]]:
-    digits = "".join(char for char in text if char.isdigit())
-    cnpj = "REPLACE(REPLACE(REPLACE(c.CNPJ, '.', ''), '/', ''), '-', '')"
-    if len(digits) == 14:
-        return f"{cnpj} = ?", [digits]
-    if len(digits) == 8:
-        return "c.CNPJRaiz = ?", [digits]
-    value = text.strip()
-    return (
-        "(c.ClienteId = ? OR c.ClienteCodigo = ? OR c.Rede = ? OR UPPER(c.GrupoVendaDescricao) = ?)",
-        [value, value, value, normalize_term(value)],
-    )
 
 
 def shape_rows(
@@ -246,17 +148,11 @@ def shape_rows(
             "fat_rs": (float(row["fat_rs_atual"] or 0), float(row["fat_rs_anterior"] or 0)),
             "fat_kg": (float(row["fat_kg_atual"] or 0), float(row["fat_kg_anterior"] or 0)),
         }
-        values["fat_tons"] = (values["fat_kg"][0] / 1000, values["fat_kg"][1] / 1000)
 
         line: dict[str, Any] = {col_id: row.get(col_id) for _, col_id, _ in columns}
         for name in metrics:
-            current, previous = values[name]
-            if name == "fat_rs":
-                current, previous = _round_money(current), _round_money(previous)
-            elif name == "fat_kg":
-                current, previous = _round_kg(current), _round_kg(previous)
-            else:
-                current, previous = round(current, 3), round(previous, 3)
+            current = metric_value(name, values["fat_rs"][0], values["fat_kg"][0])
+            previous = metric_value(name, values["fat_rs"][1], values["fat_kg"][1])
             line[f"{name}_atual"] = current
             line[f"{name}_anterior"] = previous
             line[f"{name}_variacao_abs"] = round(current - previous, 3)
@@ -304,29 +200,24 @@ class CompareWithPreviousYear:
         period, adjusted = resolve_period(values)
         notices: list[Notice] = []
 
-        extra_filters: list[tuple[str, list[Any]]] = []
+        product = None
         if values.get("filtro_produto"):
-            resolved = product_filter(fetcher, values["filtro_produto"])
-            if resolved is None:
-                return OperationResult.clarification(
-                    f'Não reconheci "{values["filtro_produto"]}" como produto, família ou '
-                    "termo de produto cadastrado. Pode indicar o produto de outra forma?"
-                )
-            extra_filters.append(resolved)
+            product = product_filter(fetcher, values["filtro_produto"])
+            if product is None:
+                return OperationResult.clarification(product_question(values["filtro_produto"]))
 
-        calendar = fetcher.fetch(CALENDAR_SQL, (period.start, period.end_exclusive))
-        last_closed = calendar[0]["UltimaFechada"] if calendar else None
-        partial = bool(calendar and calendar[0]["TemParcial"])
+        last_closed = last_closed_month(fetcher)
+        partial = has_open_month(fetcher, period.start, period.end_exclusive)
         period = Period(
             start=period.start,
             end_exclusive=period.end_exclusive,
             comparison_start=period.comparison_start,
             comparison_end_exclusive=period.comparison_end_exclusive,
             partial=partial,
-            last_closed_month=str(last_closed)[:7] if last_closed else None,
+            last_closed_month=last_closed.strftime("%Y-%m") if last_closed else None,
         )
 
-        plan = build_query(values, period, scope, extra_filters)
+        plan = build_query(values, period, scope, product)
         rows = fetcher.fetch(plan.sql, tuple(plan.params))
         main_block, exceptions, total = shape_rows(
             rows,
