@@ -2,7 +2,6 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import type {
   AgentAnswer,
-  BaseResponse,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
@@ -13,8 +12,6 @@ import {
   createChat,
   getChat,
   listChats,
-  queryEntity,
-  type SqlResult,
 } from "../../../shared/api";
 import {
   chatFormSchema,

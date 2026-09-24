@@ -157,7 +157,7 @@ export const fetchBackendQuestion = async (
   question: string,
   authorization?: string,
 ): Promise<BaseResponse<AgentAnswer>> => {
-  const response = await fetch(`${env.backendUrl}/perguntas`, {
+  const response = await requestBackend(`${env.backendUrl}/perguntas`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

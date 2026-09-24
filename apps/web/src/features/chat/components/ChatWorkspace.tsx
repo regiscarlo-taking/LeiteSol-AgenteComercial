@@ -64,58 +64,6 @@ export const ChatWorkspace = () => {
           </div>
         </header>
 
-        <div className="identity-panel">
-          <label>
-            Usuário
-            <input
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
-              placeholder="id do usuário"
-            />
-          </label>
-          <button type="button" className="secondary-action" onClick={() => void loadLocalContext()} disabled={busy}>
-            Conectar ao gateway
-          </button>
-        </div>
-
-        <section className="query-panel">
-          <div>
-            <p className="eyebrow">Consulta Fabric</p>
-            <strong>Consultar entidade</strong>
-          </div>
-          <div className="query-controls">
-            <input
-              value={entityName}
-              onChange={(event) => setEntityName(event.target.value)}
-              placeholder="agt_operacao ou dim_cliente"
-              aria-label="Nome da entidade"
-            />
-            <button type="button" className="secondary-action" onClick={() => void handleQueryEntity()} disabled={busy}>
-              Consultar
-            </button>
-          </div>
-          {entityResult ? (
-            <div className="query-result">
-              {entityResult.sql ? <code>{entityResult.sql}</code> : null}
-              <div className="result-table-wrap">
-                <table>
-                  <thead>
-                    <tr>{entityResult.columns.map((column) => <th key={column}>{column}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {entityResult.rows.map((row, index) => (
-                      <tr key={`${entityResult.entity}-${index}`}>
-                        {entityResult.columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <small>{entityResult.rowCount} linhas retornadas</small>
-            </div>
-          ) : null}
-        </section>
-
         <div className="chat-board">
           {activeChat ? (
             <div className="message-stream">
