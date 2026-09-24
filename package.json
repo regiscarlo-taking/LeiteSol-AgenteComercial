@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
-    "dev": "concurrently \"npm run dev:contracts\" \"npm run dev:gateway\" \"npm run dev:web\"",
+    "dev": "npm run dev:full",
     "dev:full": "concurrently \"npm run dev:contracts\" \"npm run dev:gateway\" \"npm run dev:web\" \"npm run dev:api\"",
     "dev:api": "node scripts/run-api.mjs --reload --port 5000",
     "dev:agent": "uv run --package leitesol-agent python -m leitesol_agent.main",

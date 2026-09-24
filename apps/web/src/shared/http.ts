@@ -1,5 +1,7 @@
 import type { BaseRequest, BaseResponse } from "@leitesol/contracts";
 
+import { clearAuthSession } from "./auth-session";
+
 type RequestMetadata = Record<string, unknown>;
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -108,6 +110,10 @@ export const requestApi = async <
       TResponseData,
       TResponseMetadata
     > | null;
+
+    if (response.status === 401) {
+      clearAuthSession(true);
+    }
 
     if (!payload) {
       throw new Error(`${errorMessage} A resposta recebida nao segue o contrato esperado.`);

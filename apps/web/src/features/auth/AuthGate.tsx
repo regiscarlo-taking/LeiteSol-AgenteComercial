@@ -1,6 +1,11 @@
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 
 import { authenticate } from "../../shared/api";
+import {
+  authExpiredEvent,
+  hasValidAuthSession,
+  saveAuthSession,
+} from "../../shared/auth-session";
 
 interface AuthGateProps {
   children: ReactNode;
@@ -11,9 +16,13 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [authenticated, setAuthenticated] = useState(
-    Boolean(localStorage.getItem("leitesol_access_token")),
-  );
+  const [authenticated, setAuthenticated] = useState(hasValidAuthSession);
+
+  useEffect(() => {
+    const showLogin = () => setAuthenticated(false);
+    window.addEventListener(authExpiredEvent, showLogin);
+    return () => window.removeEventListener(authExpiredEvent, showLogin);
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -22,8 +31,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
 
     try {
       const token = await authenticate(username, password);
-      localStorage.setItem("leitesol_access_token", token.access_token);
-      localStorage.setItem("leitesol_refresh_token", token.refresh_token);
+      saveAuthSession(token.access_token, token.refresh_token);
       setAuthenticated(true);
     } catch (requestError) {
       setError((requestError as Error).message);
