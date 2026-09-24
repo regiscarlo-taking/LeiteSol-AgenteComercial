@@ -13,6 +13,8 @@ from leitesol_api.infrastructure.fabric import (
 from leitesol_api.infrastructure.settings import Settings
 from leitesol_api.interfaces.http.routes import measures
 
+ENTRA = {"entra_tenant_id": "tenant", "entra_api_audience": "api://leitesol"}
+
 FORBIDDEN_TABLES = (
     "AGT_GESTAO_SKILL",
     "AGT_GESTAO_OPERACAO",
@@ -50,7 +52,7 @@ def test_forbidden_entities_are_rejected(name: str) -> None:
 
 
 def test_inspection_routes_do_not_exist_outside_development(monkeypatch) -> None:
-    monkeypatch.setattr(measures, "get_settings", lambda: Settings(environment="staging"))
+    monkeypatch.setattr(measures, "get_settings", lambda: Settings(environment="staging", **ENTRA))
     main.app.dependency_overrides[verify_token] = lambda: TokenData(username="test")
     try:
         entities = request(main.app, "GET", "/fabric/entities")
@@ -66,7 +68,7 @@ def test_docs_are_not_published_in_production(monkeypatch) -> None:
     monkeypatch.setattr(
         main,
         "get_settings",
-        lambda: Settings(environment="production", jwt_secret_key="x" * 32),
+        lambda: Settings(environment="production", **ENTRA),
     )
     app = main.create_app()
 

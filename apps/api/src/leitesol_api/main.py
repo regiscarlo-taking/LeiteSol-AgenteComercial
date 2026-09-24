@@ -14,6 +14,7 @@ from leitesol_api.interfaces.http.routes.auth import router as auth_router, limi
 from leitesol_api.interfaces.http.routes.chat import router as chat_router
 from leitesol_api.interfaces.http.routes.health import router as health_router
 from leitesol_api.interfaces.http.routes.measures import router as measures_router
+from leitesol_api.interfaces.http.routes.questions import router as questions_router
 from leitesol_api.interfaces.responses import build_response_payload
 
 
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(health_router)
     app.include_router(measures_router)
+    app.include_router(questions_router)
 
     # Customizar OpenAPI schema para documentar OAuth2
     def custom_openapi():

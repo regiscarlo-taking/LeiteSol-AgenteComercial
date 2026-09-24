@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     storage_blob_prefix: str = ""
     fabric_driver: str = "ODBC Driver 18 for SQL Server"
     fabric_connection_timeout: int = 10
+    # "local" (login admin + JWT próprio) só existe em development; fora dele o
+    # usuário chega com token do Entra ID e a alçada sai do e-mail dele.
+    auth_mode: Literal["", "local", "entra"] = ""
+    entra_api_audience: str = ""
+    entra_full_access_group_ids: str = ""
+    local_user_email: str = ""
+    local_user_full_access: bool = True
+    catalog_cache_seconds: int = 600
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
@@ -39,8 +47,23 @@ class Settings(BaseSettings):
 
     def __init__(self, **data):
         super().__init__(**data)
-        if self.environment == "production" and not self.jwt_secret_key:
-            raise ValueError("jwt_secret_key must be set in production environment")
+        if self.effective_auth_mode == "local":
+            if self.environment != "development":
+                raise ValueError("auth_mode=local is only allowed in development")
+        elif not (self.entra_tenant_id and (self.entra_api_audience or self.entra_client_id)):
+            raise ValueError("auth_mode=entra requires entra_tenant_id and entra_api_audience")
+
+    @property
+    def effective_auth_mode(self) -> str:
+        if self.auth_mode:
+            return self.auth_mode
+        return "local" if self.environment == "development" else "entra"
+
+    @property
+    def full_access_groups(self) -> frozenset[str]:
+        return frozenset(
+            group.strip() for group in self.entra_full_access_group_ids.split(",") if group.strip()
+        )
 
     @property
     def is_development(self) -> bool:

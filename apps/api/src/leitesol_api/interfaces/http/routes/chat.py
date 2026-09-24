@@ -9,10 +9,17 @@ from leitesol_api.infrastructure.fabric import (
 )
 from leitesol_api.infrastructure.gemini import GeminiError, get_gemini_client
 from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.interfaces.http.routes.measures import require_development
 from leitesol_api.interfaces.responses import build_response_payload
 from leitesol_api.interfaces.schemas import BaseResponse, ChatQueryRequest, ChatQueryResponse
 
-router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(verify_token)])
+# Protótipo de navegação por entidade: devolve linhas cruas sem alçada, então
+# só existe em development. O fluxo do agente é o POST /perguntas.
+router = APIRouter(
+    prefix="/chat",
+    tags=["chat"],
+    dependencies=[Depends(require_development), Depends(verify_token)],
+)
 
 
 @router.post("/query", response_model=BaseResponse[ChatQueryResponse, dict])

@@ -109,3 +109,44 @@ Ordem: (1) segurança e aderência à arquitetura, (2) contrato de dados, (3) qu
 | 3 | Web: `noEmit: true` no `tsconfig`, `.js` compilados removidos e ignorados no `.gitignore` | ⚠️ **`tsc` não rodado** (sem Node nesta máquina) |
 
 Suíte da API: **19 testes, todos passando** (eram 3).
+
+---
+
+## Blocos 2 e 3 — aplicados nesta branch (24-09)
+
+### Bloco 2 — identidade e alçada
+
+- `auth_mode` novo: `local` (o login `admin` + JWT próprio de antes) **só em `development`**; fora dele, `entra`. A configuração recusa subir com `local` em staging ou produção.
+- `verify_token` em modo `entra` valida o **access token v2 do Entra ID**: assinatura RS256 pela chave publicada do tenant (JWKS), `aud` = a API, `iss` = o tenant. O e-mail sai de `preferred_username`/`email`/`upn`. Um grupo listado em `LEITESOL_API_ENTRA_FULL_ACCESS_GROUP_IDS` dá **visão completa** (diretoria / Adm. Vendas).
+- `ScopeResolver` (`infrastructure/scope.py`) traduz e-mail em carteira de vendedores **antes** de qualquer consulta (RT34). Sem linha na tabela de acesso, a resposta é `sem_alcada` e nenhum dado é lido.
+- **Peça nova no Warehouse:** `IA_COMERCIAL.vw_rls_usuario_equipe` (no `02_views_analiticas.sql` do repositório de documentação). A identidade do agente não lê o espelho, então a `RLS_USUARIO_EQUIPE` precisa chegar por uma view. ⚠️ **Precisa ser aplicada no `AgenteFaturamentoDW`** antes de o fluxo funcionar com usuário de carteira.
+- O código da equipe concedida também entra como vendedor, porque a `vw_hierarquia_equipe` só ancora gestor que tem subordinado (caso do 967, P-RLSGRANT).
+- Em development, `LEITESOL_API_LOCAL_USER_EMAIL` e `LEITESOL_API_LOCAL_USER_FULL_ACCESS` simulam um usuário de carteira ou de visão completa.
+- **Pré-requisitos no app registration (cliente):** expor a API (`api://…`), `accessTokenAcceptedVersion = 2`, claim `groups` no access token e os IDs dos grupos de visão completa. Depende de P-INTRANET/Q-718 para o front obter o token (MSAL).
+
+### Bloco 3 — núcleo do agente (`POST /perguntas`)
+
+Fluxo do contrato §2, com a LLM só nas etapas 3, 4 e 7:
+
+| Etapa | Onde |
+|---|---|
+| 2 Alçada | `ScopeResolver` |
+| 3 Intenção | `GeminiClient.classify_intent`: escolhe um `intencao_id` do `AGT_OPERACAO`, com as perguntas de `AGT_INTENCAO_EXEMPLO` como exemplos. Fora da lista = `fora_de_escopo` |
+| 4 Parâmetros | `GeminiClient.extract_parameters` propõe; `application/parameters.py` valida contra `AGT_OPERACAO_PARAMETRO`. Obrigatório ausente ou enum fora do domínio = `esclarecimento` |
+| 5 Execução | `application/operations/`: só a **OP12 (comparar com o ano anterior)** está implementada. As outras 21 são reconhecidas e respondem que ainda não estão disponíveis |
+| 6 Ressalvas | RT17 sempre; `AGT_OPERACAO.alertas`; TR02 (mês parcial), RT24 (base zero), base desde 2025, ajuste para meses completos, limite de linhas |
+| 7 Redação | `GeminiClient.compose_narrative`: recebe o resultado agregado e os avisos; sem recalcular nem inferir causa. Se falhar, a resposta sai com os dados e um aviso |
+
+**OP12:** período normalizado para competências inteiras e deslocado -1 ano (TR06). Uma única consulta T-SQL com agregação condicional nos dois períodos, **Produto Acabado** (RT13), **sem exterior** (RT14), **carteira** (RT34). Filtros: UF, município, segmento, vendedor, cliente/rede/CNPJ e produto. Produto aceita família/grupamento/subtotal ou termos da `vw_produto_termo`; termo fora da lista vira pergunta (RT35). Granularidade total/cliente/produto/vendedor/uf/município/segmento. KG arredondado com 0,5 subindo (RT16). Base zero vai para o bloco de exceções, sem percentual (RT24). Ordenação por maior variação absoluta.
+
+A resposta segue o **envelope do §6** (`status`, `operacao`, `parametros_interpretados`, `periodo`, `recorte`, `dados.principal`/`dados.excecoes`, `avisos`, `narrativa`, `pergunta_ao_usuario`). Falha técnica devolve 503 com `status = erro` e o `correlation_id`.
+
+O `/chat/query` antigo passou a existir **só em development**: ele devolve linhas cruas sem alçada.
+
+### O que foi e o que não foi verificado
+
+- ✅ **41 testes da API passando**: parâmetros, período, SQL da OP12 (filtros, alçada, contagem de parâmetros), base zero, arredondamento, fluxo inteiro com LLM e banco falsos, alçada, token Entra com chave RSA gerada no teste (audiência e tenant errados recusados) e a rota `/perguntas`.
+- ⚠️ **Não rodado contra o Warehouse nem contra o Gemini reais.** O SQL da OP12 usa nomes de coluna do contrato gerado; o primeiro teste real pode apontar tipo de coluna (ex.: `FlagProdutoAcabado`, `MesFechado`) ou formato de `CNPJ`.
+- ⚠️ **Decisão pendente de registro:** os números saem de **T-SQL sobre as views**, com as fórmulas do `AGT_MEDIDA`, e não do modelo semântico via DAX (contrato §1). É o caminho da A2.16; a reconciliação com o Power BI (`30_reconciliacao_bi.sql`) é o que garante que batem.
+- ⚠️ **Gateway e web ainda chamam `/chat/query`**, que agora é só de development. Ligar a tela ao `/perguntas` e ao MSAL é o próximo passo do front.
+- Sinônimos do `AGT_GLOSSARIO` ainda não entram na normalização de produto.

@@ -34,6 +34,9 @@ async def login(request: Request, credentials: LoginRequest) -> Token:
     - password: (conforme LEITESOL_API_BASIC_AUTH_PASSWORD no .env)
     """
     settings = get_settings()
+    if settings.effective_auth_mode != "local":
+        # Fora de development o login é do Entra ID; esta rota não existe.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
     if not authenticate_user(credentials.username, credentials.password):
         raise HTTPException(
@@ -63,6 +66,8 @@ async def refresh_access_token(body: RefreshTokenRequest) -> Token:
     para não ficar registrado em log de proxy.
     """
     settings = get_settings()
+    if settings.effective_auth_mode != "local":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     refresh_token = body.refresh_token
     
     try:
