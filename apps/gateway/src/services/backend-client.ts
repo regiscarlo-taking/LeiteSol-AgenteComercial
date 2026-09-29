@@ -1,4 +1,8 @@
-import type { BaseResponse, HealthStatus, Measure } from "@leitesol/contracts";
+import type {
+  BaseResponse,
+  HealthStatus,
+  Measure,
+} from "@leitesol/contracts";
 
 import { env } from "../config/env.js";
 
@@ -41,10 +45,13 @@ export class BackendRequestError extends Error {
   }
 }
 
-const requestBackend = async (url: string, options?: RequestInit): Promise<Response> => {
+const requestBackend = async (
+  url: string,
+  options?: RequestInit,
+): Promise<Response> => {
   try {
     return await fetch(url, options);
-  } catch (error) {
+  } catch {
     throw new BackendRequestError(
       "A API não está acessível. Inicie a API e confirme BACKEND_URL.",
       503,
@@ -52,36 +59,59 @@ const requestBackend = async (url: string, options?: RequestInit): Promise<Respo
   }
 };
 
+const authorizationHeader = (
+  authorization?: string,
+): Record<string, string> =>
+  authorization
+    ? {
+        Authorization: authorization,
+      }
+    : {};
+
 export const authenticateBackend = async (
   credentials: LoginCredentials,
   traceId: string,
 ): Promise<BackendTokenResponse> => {
-  const response = await requestBackend(`${env.backendUrl}/token`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-request-id": traceId,
+  const response = await requestBackend(
+    `${env.backendUrl}/token`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": traceId,
+      },
+      body: JSON.stringify(credentials),
     },
-    body: JSON.stringify(credentials),
-  });
+  );
 
   if (!response.ok) {
-    throw new BackendRequestError("Usuário ou senha inválidos.", response.status);
+    throw new BackendRequestError(
+      "Usuário ou senha inválidos.",
+      response.status,
+    );
   }
 
   return (await response.json()) as BackendTokenResponse;
 };
 
-export const fetchBackendHealth = async (traceId: string): Promise<BaseResponse<HealthStatus>> => {
-  const response = await requestBackend(`${env.backendUrl}/health`, {
-    headers: {
-      "x-api-key": env.backendApiKey,
-      "x-request-id": traceId,
+export const fetchBackendHealth = async (
+  traceId: string,
+): Promise<BaseResponse<HealthStatus>> => {
+  const response = await requestBackend(
+    `${env.backendUrl}/health`,
+    {
+      headers: {
+        "x-api-key": env.backendApiKey,
+        "x-request-id": traceId,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
-    throw new Error(`Backend unavailable: ${response.status}`);
+    throw new BackendRequestError(
+      `Backend unavailable: ${response.status}`,
+      response.status,
+    );
   }
 
   return (await response.json()) as BaseResponse<HealthStatus>;
@@ -91,23 +121,30 @@ export const fetchBackendMeasures = async (
   traceId: string,
   authorization?: string,
 ): Promise<BaseResponse<Measure[]>> => {
-  const response = await requestBackend(`${env.backendUrl}/fabric/measures`, {
-    headers: {
-      "x-api-key": env.backendApiKey,
-      "x-request-id": traceId,
-      ...(authorization ? { authorization } : {}),
+  const response = await requestBackend(
+    `${env.backendUrl}/fabric/measures`,
+    {
+      headers: {
+        "x-api-key": env.backendApiKey,
+        "x-request-id": traceId,
+        ...authorizationHeader(authorization),
+      },
     },
-  });
+  );
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as BaseResponse<Measure[]> | null;
-    if (payload) {
-      return payload;
-    }
-    throw new Error(`Backend unavailable: ${response.status}`);
+  const payload =
+    (await response.json().catch(() => null)) as
+      | BaseResponse<Measure[]>
+      | null;
+
+  if (!payload) {
+    throw new BackendRequestError(
+      `Backend unavailable: ${response.status}`,
+      response.status,
+    );
   }
 
-  return (await response.json()) as BaseResponse<Measure[]>;
+  return payload;
 };
 
 export const fetchBackendEntity = async (
@@ -115,21 +152,32 @@ export const fetchBackendEntity = async (
   query: EntityQueryRequest,
   authorization?: string,
 ): Promise<BaseResponse<SqlResultResponse>> => {
-  const response = await requestBackend(`${env.backendUrl}/fabric/query`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": env.backendApiKey,
-      "x-request-id": traceId,
-      ...(authorization ? { authorization } : {}),
+  const response = await requestBackend(
+    `${env.backendUrl}/fabric/query`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": env.backendApiKey,
+        "x-request-id": traceId,
+        ...authorizationHeader(authorization),
+      },
+      body: JSON.stringify(query),
     },
-    body: JSON.stringify(query),
-  });
+  );
 
-  const payload = (await response.json().catch(() => null)) as BaseResponse<SqlResultResponse> | null;
+  const payload =
+    (await response.json().catch(() => null)) as
+      | BaseResponse<SqlResultResponse>
+      | null;
+
   if (!payload) {
-    throw new Error(`Backend unavailable: ${response.status}`);
+    throw new BackendRequestError(
+      `Backend unavailable: ${response.status}`,
+      response.status,
+    );
   }
+
   return payload;
 };
 
@@ -138,16 +186,32 @@ export const fetchBackendChatQuery = async (
   question: string,
   authorization?: string,
 ): Promise<BaseResponse<ChatQueryResponse>> => {
-  const response = await requestBackend(`${env.backendUrl}/chat/query`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-request-id": traceId,
-      ...(authorization ? { authorization } : {}),
+  const response = await requestBackend(
+    `${env.backendUrl}/chat/query`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": traceId,
+        ...authorizationHeader(authorization),
+      },
+      body: JSON.stringify({
+        question,
+      }),
     },
-    body: JSON.stringify({ question }),
-  });
-  const payload = (await response.json().catch(() => null)) as BaseResponse<ChatQueryResponse> | null;
-  if (!payload) throw new Error(`Backend unavailable: ${response.status}`);
+  );
+
+  const payload =
+    (await response.json().catch(() => null)) as
+      | BaseResponse<ChatQueryResponse>
+      | null;
+
+  if (!payload) {
+    throw new BackendRequestError(
+      `Backend unavailable: ${response.status}`,
+      response.status,
+    );
+  }
+
   return payload;
 };

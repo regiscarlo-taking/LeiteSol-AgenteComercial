@@ -1,10 +1,12 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 
-import { authenticate } from "../../shared/api";
+import {
+  authenticate,
+  getAuthSession,
+} from "../../shared/api";
+
 import {
   authExpiredEvent,
-  hasValidAuthSession,
-  saveAuthSession,
 } from "../../shared/auth-session";
 
 interface AuthGateProps {
@@ -16,29 +18,54 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [authenticated, setAuthenticated] = useState(hasValidAuthSession);
+  const [authenticated, setAuthenticated] = useState<boolean | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
-    const showLogin = () => setAuthenticated(false);
+    const checkSession = async () => {
+      try {
+        const session = await getAuthSession();
+        setAuthenticated(session.authenticated);
+      } catch {
+        setAuthenticated(false);
+      }
+    };
+
+    checkSession();
+
+    const showLogin = () => {
+      setAuthenticated(false);
+    };
+
     window.addEventListener(authExpiredEvent, showLogin);
-    return () => window.removeEventListener(authExpiredEvent, showLogin);
+
+    return () => {
+      window.removeEventListener(authExpiredEvent, showLogin);
+    };
   }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     setBusy(true);
     setError("");
 
     try {
-      const token = await authenticate(username, password);
-      saveAuthSession(token.access_token, token.refresh_token);
-      setAuthenticated(true);
+      const session = await authenticate(username, password);
+
+      setAuthenticated(session.authenticated);
+      setPassword("");
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
+  if (authenticated === undefined) {
+    return null;
+  }
 
   if (authenticated) {
     return <>{children}</>;
@@ -48,8 +75,13 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     <main className="auth-shell">
       <form className="auth-panel" onSubmit={handleSubmit}>
         <p className="eyebrow">LeiteSol Agent Hub</p>
+
         <h1>Autenticar acesso</h1>
-        <p className="auth-copy">Entre para consultar os dados comerciais do Fabric.</p>
+
+        <p className="auth-copy">
+          Entre para consultar os dados comerciais do Fabric.
+        </p>
+
         <label>
           Usuário
           <input
@@ -59,6 +91,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
             required
           />
         </label>
+
         <label>
           Senha
           <input
@@ -69,7 +102,9 @@ export const AuthGate = ({ children }: AuthGateProps) => {
             required
           />
         </label>
+
         {error ? <p className="auth-error">{error}</p> : null}
+
         <button className="primary-action" type="submit" disabled={busy}>
           {busy ? "Autenticando..." : "Autenticar"}
         </button>

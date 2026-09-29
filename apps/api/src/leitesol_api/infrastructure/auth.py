@@ -1,21 +1,25 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import jwt
 import bcrypt
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
 from leitesol_api.infrastructure.settings import get_settings
 
-# OAuth2 scheme - integra automaticamente com o Swagger
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class Token(BaseModel):
@@ -27,56 +31,62 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: str
-    token_type: str = "access"  # "access" ou "refresh"
+    token_type: str = "access"
 
 
-def create_access_token(username: str, expires_delta: Optional[timedelta] = None) -> str:
-    """Cria um JWT access token."""
+def create_access_token(
+    username: str,
+    expires_delta: Optional[timedelta] = None,
+) -> str:
     settings = get_settings()
-    
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiration_hours)
 
-    to_encode = {
+    expire = (
+        datetime.now(timezone.utc) + expires_delta
+        if expires_delta
+        else datetime.now(timezone.utc)
+        + timedelta(hours=settings.jwt_expiration_hours)
+    )
+
+    payload = {
         "sub": username,
         "type": "access",
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
 
-    encoded_jwt = jwt.encode(
-        to_encode,
+    return jwt.encode(
+        payload,
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    return encoded_jwt
 
 
 def create_refresh_token(username: str) -> str:
-    """Cria um JWT refresh token."""
     settings = get_settings()
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_refresh_expiration_hours)
 
-    to_encode = {
+    expire = datetime.now(timezone.utc) + timedelta(
+        hours=settings.jwt_refresh_expiration_hours
+    )
+
+    payload = {
         "sub": username,
         "type": "refresh",
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
 
-    encoded_jwt = jwt.encode(
-        to_encode,
+    return jwt.encode(
+        payload,
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    return encoded_jwt
 
 
-def verify_token(token: str = Depends(oauth2_scheme)) -> TokenData:
-    """Valida e extrai dados do JWT token."""
+def verify_token(
+    token: str = Depends(oauth2_scheme),
+) -> TokenData:
     settings = get_settings()
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
@@ -89,42 +99,57 @@ def verify_token(token: str = Depends(oauth2_scheme)) -> TokenData:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
+
         username = payload.get("sub")
-        token_type = payload.get("type", "access")
-        
-        if not isinstance(username, str) or not isinstance(token_type, str):
+        token_type = payload.get("type")
+
+        if not isinstance(username, str):
             raise credentials_exception
-        
-        # Rejeitar refresh tokens em endpoints que esperam access tokens
+
         if token_type != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Access token required",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        return TokenData(username=username, token_type=token_type)
+
+        return TokenData(
+            username=username,
+            token_type="access",
+        )
+
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+
     except jwt.InvalidTokenError:
         raise credentials_exception
 
 
-def authenticate_user(username: str, password: str) -> bool:
-    """Autentica o usuário contra as credenciais configuradas."""
+def authenticate_user(
+    username: str,
+    password: str,
+) -> bool:
     settings = get_settings()
-    
-    if not settings.basic_auth_username or not settings.basic_auth_password:
+
+    if not settings.basic_auth_username:
         return False
-    
+
+    if not settings.basic_auth_password:
+        return False
+
     if username != settings.basic_auth_username:
         return False
-    
-    # Usar comparação segura com bcrypt.
+
     password_hash = settings.basic_auth_password.replace("$$", "$")
+
     try:
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
-    except ValueError:
+        return bcrypt.checkpw(
+            password.encode("utf-8"),
+            password_hash.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
         return False

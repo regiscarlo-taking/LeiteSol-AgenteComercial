@@ -1,4 +1,10 @@
-import type { BaseResponse, ChatSqlResult, HealthStatus, Measure } from "@leitesol/contracts";
+import type {
+  BaseResponse,
+  ChatSqlResult,
+  HealthStatus,
+  Measure,
+} from "@leitesol/contracts";
+
 import type {
   ChatAttachment,
   ChatConversation,
@@ -8,13 +14,9 @@ import type {
 } from "@leitesol/contracts";
 
 import { requestApi } from "./http";
-import { getValidAccessToken } from "./auth-session";
 
-export interface AuthToken {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
+export interface AuthSession {
+  authenticated: boolean;
 }
 
 export type SqlResult = ChatSqlResult;
@@ -24,38 +26,76 @@ export interface ChatQueryResult {
   sqlResult: SqlResult;
 }
 
-export const authenticate = async (username: string, password: string): Promise<AuthToken> => {
-  const response = await fetch("/api/auth/token", {
+export const authenticate = async (
+  username: string,
+  password: string,
+): Promise<AuthSession> => {
+  const response = await fetch("/api/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      username,
+      password,
+    }),
   });
 
   if (!response.ok) {
     throw new Error("Usuário ou senha inválidos.");
   }
 
-  return (await response.json()) as AuthToken;
+  return (await response.json()) as AuthSession;
 };
 
-export const queryChat = async (question: string): Promise<BaseResponse<ChatQueryResult>> =>
+export const getAuthSession = async (): Promise<AuthSession> => {
+  const response = await fetch("/api/auth/session", {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Sessão não autenticada.");
+  }
+
+  return (await response.json()) as AuthSession;
+};
+
+export const logout = async (): Promise<void> => {
+  const response = await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Não foi possível encerrar a sessão.");
+  }
+};
+
+export const queryChat = async (
+  question: string,
+): Promise<BaseResponse<ChatQueryResult>> =>
   requestApi<ChatQueryResult, { question: string }>({
     url: "/api/chat/query",
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
+    data: {
+      question,
     },
-    data: { question },
     errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
   });
 
-export const getGatewayHealth = async (): Promise<BaseResponse<HealthStatus>> =>
+export const getGatewayHealth = async (): Promise<
+  BaseResponse<HealthStatus>
+> =>
   requestApi<HealthStatus>({
     url: "/health/live",
     errorMessage: "Nao foi possivel consultar a saude do gateway.",
   });
 
-export const getBackendHealth = async (): Promise<BaseResponse<HealthStatus>> =>
+export const getBackendHealth = async (): Promise<
+  BaseResponse<HealthStatus>
+> =>
   requestApi<HealthStatus>({
     url: "/api/health",
     errorMessage: "Nao foi possivel consultar a saude do backend.",
@@ -64,30 +104,34 @@ export const getBackendHealth = async (): Promise<BaseResponse<HealthStatus>> =>
 export const listMeasures = async (): Promise<BaseResponse<Measure[]>> =>
   requestApi<Measure[]>({
     url: "/api/fabric/measures",
-    headers: {
-      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
-    },
     errorMessage: "Nao foi possivel carregar as medidas do Fabric.",
   });
 
-export const queryEntity = async (entity: string, limit = 100): Promise<BaseResponse<SqlResult>> =>
+export const queryEntity = async (
+  entity: string,
+  limit = 100,
+): Promise<BaseResponse<SqlResult>> =>
   requestApi<SqlResult, { entity: string; limit: number }>({
     url: "/api/fabric/query",
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${getValidAccessToken() ?? ""}`,
+    data: {
+      entity,
+      limit,
     },
-    data: { entity, limit },
     errorMessage: "Nao foi possivel consultar a entidade do Fabric.",
   });
 
-export const listChats = async (): Promise<BaseResponse<ChatConversationSummary[]>> =>
+export const listChats = async (): Promise<
+  BaseResponse<ChatConversationSummary[]>
+> =>
   requestApi<ChatConversationSummary[]>({
     url: "/api/chats",
     errorMessage: "Nao foi possivel carregar a lista de conversas.",
   });
 
-export const getChat = async (chatId: string): Promise<BaseResponse<ChatConversation>> =>
+export const getChat = async (
+  chatId: string,
+): Promise<BaseResponse<ChatConversation>> =>
   requestApi<ChatConversation>({
     url: `/api/chats/${chatId}`,
     errorMessage: "Nao foi possivel carregar a conversa selecionada.",
@@ -112,7 +156,13 @@ export const sendChatMessage = async ({
   content: string;
   attachments: ChatAttachment[];
 }): Promise<BaseResponse<SendChatMessageResult>> =>
-  requestApi<SendChatMessageResult, { content: string; attachments: ChatAttachment[] }>({
+  requestApi<
+    SendChatMessageResult,
+    {
+      content: string;
+      attachments: ChatAttachment[];
+    }
+  >({
     url: `/api/chats/${chatId}/messages`,
     method: "POST",
     data: {

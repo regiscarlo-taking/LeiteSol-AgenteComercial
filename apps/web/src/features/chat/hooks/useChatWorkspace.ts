@@ -1,4 +1,9 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 
 import type {
   ChatAttachment,
@@ -6,15 +11,10 @@ import type {
   ChatConversationSummary,
 } from "@leitesol/contracts";
 
-import {
-  createChat,
-  getChat,
-  listChats,
-  queryChat,
-} from "../../../shared/api";
+import { queryChat } from "../../../shared/api";
+
 import {
   chatFormSchema,
-  toChatSendCommand,
   type ChatFormValues,
 } from "../domain/chat-form";
 
@@ -34,94 +34,91 @@ const buildAttachmentFromFile = (file: File): ChatAttachment => ({
   status: "attached",
 });
 
-const toConversationSummary = (conversation: ChatConversation): ChatConversationSummary => {
-  const lastMessage = conversation.messages[conversation.messages.length - 1];
+const createLocalConversation = (): ChatConversation => {
+  const now = new Date().toISOString();
+
+  return {
+    id: `chat-${crypto.randomUUID()}`,
+    title: "Nova consulta comercial",
+    createdAt: now,
+    updatedAt: now,
+    status: "active",
+    messages: [],
+  };
+};
+
+const toConversationSummary = (
+  conversation: ChatConversation,
+): ChatConversationSummary => {
+  const lastMessage =
+    conversation.messages[conversation.messages.length - 1];
 
   return {
     id: conversation.id,
     title: conversation.title,
-    lastMessagePreview: lastMessage?.content.slice(0, 96) ?? "Sem mensagens ainda.",
+    lastMessagePreview:
+      lastMessage?.content.slice(0, 96) ?? "Sem mensagens ainda.",
     updatedAt: conversation.updatedAt,
     status: conversation.status,
   };
 };
 
 export const useChatWorkspace = () => {
-  const [chats, setChats] = useState<ChatConversationSummary[]>([]);
-  const [activeChat, setActiveChat] = useState<ChatConversation | null>(null);
+  const [activeChat, setActiveChat] =
+    useState<ChatConversation | null>(null);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const loadChats = async () => {
-      try {
-        const chatList = await listChats();
-        setChats(chatList.data ?? []);
-      } catch {
-        // The conversation list is an enhancement; the user can still start a chat.
-      }
-    };
-
-    void loadChats();
-  }, []);
+  const chats: ChatConversationSummary[] = activeChat
+    ? [toConversationSummary(activeChat)]
+    : [];
 
   const openChat = async (chatId: string) => {
-    try {
-      setBusy(true);
-      setError("");
-      const response = await getChat(chatId);
-      startTransition(() => {
-        setActiveChat(response.data);
-      });
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setBusy(false);
+    if (!activeChat || activeChat.id !== chatId) {
+      return;
     }
+
+    setError("");
   };
 
   const handleCreateChat = async () => {
-    setBusy(true);
+    setBusy(false);
     setError("");
 
-    try {
-      const response = await createChat();
-      const conversation = response.data;
-
-      if (!conversation) {
-        throw new Error("Não foi possível iniciar a nova conversa.");
-      }
-
-      startTransition(() => {
-        setActiveChat(conversation);
-        setChats((currentChats) => [toConversationSummary(conversation), ...currentChats]);
-        setDraft("");
-        setAttachments([]);
-      });
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    startTransition(() => {
+      setActiveChat(null);
+      setDraft("");
+      setAttachments([]);
+    });
   };
 
-  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []).map(buildAttachmentFromFile);
+  const handleFileSelection = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFiles = Array.from(
+      event.target.files ?? [],
+    ).map(buildAttachmentFromFile);
 
     if (selectedFiles.length === 0) {
       return;
     }
 
-    setAttachments((currentAttachments) => [...currentAttachments, ...selectedFiles]);
+    setAttachments((currentAttachments) => [
+      ...currentAttachments,
+      ...selectedFiles,
+    ]);
+
     event.target.value = "";
   };
 
   const removeAttachment = (attachmentId: string) => {
     setAttachments((currentAttachments) =>
-      currentAttachments.filter((attachment) => attachment.id !== attachmentId),
+      currentAttachments.filter(
+        (attachment) => attachment.id !== attachmentId,
+      ),
     );
   };
 
@@ -132,7 +129,10 @@ export const useChatWorkspace = () => {
     } satisfies ChatFormValues);
 
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Dados inválidos para envio.");
+      setError(
+        parsed.error.issues[0]?.message ??
+          "Dados inválidos para envio.",
+      );
       return;
     }
 
@@ -145,65 +145,59 @@ export const useChatWorkspace = () => {
 
     try {
       const currentChat =
-        activeChat ??
-        (
-          await createChat({
-            title: "Nova consulta comercial",
-          })
-        ).data;
+        activeChat ?? createLocalConversation();
 
-      if (!currentChat) {
-        throw new Error("Não foi possível preparar a conversa para envio.");
-      }
+      const userMessage = {
+        id: `user-${crypto.randomUUID()}`,
+        role: "user" as const,
+        content: parsed.data.message,
+        createdAt: new Date().toISOString(),
+        attachments:
+          attachments.length > 0 ? attachments : null,
+      };
 
-      const command = toChatSendCommand({
-        userId: parsed.data.userId,
-        message: parsed.data.message,
-        attachments,
-      });
+      const chatResponse = await queryChat(
+        parsed.data.message,
+      );
 
-      const chatResponse = await queryChat(command.content);
-      const backendContent = chatResponse.data?.answer ?? "Nenhuma resposta retornada.";
+      const backendContent =
+        chatResponse.data?.answer ??
+        "Nenhuma resposta retornada.";
 
-      const nextMessages = [
-        ...currentChat.messages,
-        {
-          id: `user-${crypto.randomUUID()}`,
-          role: "user" as const,
-          content: command.content,
-          createdAt: new Date().toISOString(),
-          attachments: command.attachments.length > 0 ? command.attachments : null,
-        },
-        {
-          id: `assistant-${crypto.randomUUID()}`,
-          role: "assistant" as const,
-          content: backendContent,
-          createdAt: new Date().toISOString(),
-          attachments: null,
-          sqlResult: chatResponse.data?.sqlResult ?? null,
-        },
-      ];
+      const assistantMessage = {
+        id: `assistant-${crypto.randomUUID()}`,
+        role: "assistant" as const,
+        content: backendContent,
+        createdAt: new Date().toISOString(),
+        attachments: null,
+        sqlResult:
+          chatResponse.data?.sqlResult ?? null,
+      };
 
-      const updatedConversation: typeof currentChat = {
+      const updatedConversation: ChatConversation = {
         ...currentChat,
-        title: currentChat.title || "Nova consulta comercial",
+        title:
+          currentChat.messages.length === 0
+            ? parsed.data.message.slice(0, 60)
+            : currentChat.title,
         updatedAt: new Date().toISOString(),
         status: "active",
-        messages: nextMessages,
+        messages: [
+          ...currentChat.messages,
+          userMessage,
+          assistantMessage,
+        ],
       };
 
       startTransition(() => {
         setActiveChat(updatedConversation);
-        setChats((currentChats) => {
-          const nextSummary = toConversationSummary(updatedConversation);
-          const remainingChats = currentChats.filter((chat) => chat.id !== updatedConversation.id);
-          return [nextSummary, ...remainingChats];
-        });
         setDraft("");
         setAttachments([]);
       });
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(
+        (requestError as Error).message,
+      );
     } finally {
       setBusy(false);
     }
