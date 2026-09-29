@@ -1,6 +1,7 @@
 import "../../../app/App.css";
 
 import { useChatWorkspace } from "../hooks/useChatWorkspace";
+import { AgentAnswerView } from "./AgentAnswerView";
 
 export const ChatWorkspace = () => {
   const {
@@ -85,9 +86,11 @@ export const ChatWorkspace = () => {
                     </div>
                   ) : null}
 
+                  {message.agentAnswer ? <AgentAnswerView answer={message.agentAnswer} /> : null}
+
                   {message.sqlResult ? (
                     <section className="query-result">
-                      <code>{message.sqlResult.sql}</code>
+                      {message.sqlResult.sql ? <code>{message.sqlResult.sql}</code> : null}
                       <div className="result-table-wrap">
                         <table>
                           <thead>

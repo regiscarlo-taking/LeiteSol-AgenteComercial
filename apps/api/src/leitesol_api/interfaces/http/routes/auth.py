@@ -15,6 +15,7 @@ from leitesol_api.infrastructure.auth import (
     oauth2_scheme,
 )
 from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.interfaces.schemas import RefreshTokenRequest
 
 router = APIRouter(tags=["authentication"])
 limiter = Limiter(key_func=get_remote_address)
@@ -33,6 +34,9 @@ async def login(request: Request, credentials: LoginRequest) -> Token:
     - password: (conforme LEITESOL_API_BASIC_AUTH_PASSWORD no .env)
     """
     settings = get_settings()
+    if settings.effective_auth_mode != "local":
+        # Fora de development o login é do Entra ID; esta rota não existe.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
     if not authenticate_user(credentials.username, credentials.password):
         raise HTTPException(
@@ -54,13 +58,17 @@ async def login(request: Request, credentials: LoginRequest) -> Token:
 
 
 @router.post("/token/refresh", response_model=Token)
-async def refresh_access_token(refresh_token: str) -> Token:
+async def refresh_access_token(body: RefreshTokenRequest) -> Token:
     """
     Renovar access token usando refresh token.
     
-    Não requer re-autenticação.
+    Não requer re-autenticação. O refresh token vai no corpo, nunca na URL,
+    para não ficar registrado em log de proxy.
     """
     settings = get_settings()
+    if settings.effective_auth_mode != "local":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    refresh_token = body.refresh_token
     
     try:
         import jwt
