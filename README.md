@@ -9,7 +9,7 @@ apps/
   api/       # Backend Python (FastAPI) organizado por camadas
   gateway/   # BFF/API gateway entre frontend e backend
   web/       # Frontend React + Vite
-  agent/     # Espaço dedicado para o agente comercial
+  agent/     # Agente comercial (biblioteca): catálogo, operações e fluxo da pergunta
 packages/
   config/    # Configurações compartilhadas
   contracts/ # Tipos/contratos TypeScript compartilhados
@@ -19,7 +19,7 @@ packages/
 
 - `apps/api` concentra regras de exposição HTTP e casos de uso do backend.
 - `apps/gateway` atua como camada intermediária entre o React e a API Python.
-- `apps/agent` fica isolado para evoluir o agente sem acoplar à API principal.
+- `apps/agent` concentra a lógica do agente; a API o importa e cuida de autenticação, alçada, conexões e rotas (ver `apps/agent/README.md`).
 - `packages/contracts` centraliza contratos compartilhados do lado TypeScript.
 - `turbo` e `pnpm workspace` organizam as aplicações JavaScript/TypeScript.
 - `uv workspace` organiza os projetos Python de forma consistente.

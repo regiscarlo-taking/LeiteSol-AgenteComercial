@@ -1,7 +1,7 @@
 from dataclasses import asdict
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from leitesol_api.application.list_measures import ListMeasures
@@ -27,6 +27,12 @@ router = APIRouter(
     dependencies=[Depends(verify_token)],
 )
 logger = logging.getLogger("leitesol.api.http.fabric")
+
+
+def require_development() -> None:
+    """Rotas de inspeção expõem linhas cruas; fora de development não existem."""
+    if not get_settings().is_development:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
 
 @router.get("/measures", response_model=BaseResponse[list[MeasureResponse], dict])
@@ -71,7 +77,11 @@ def list_measures(request: Request) -> BaseResponse[list[MeasureResponse], dict]
     return BaseResponse[list[MeasureResponse], dict].model_validate(payload)
 
 
-@router.get("/entities", response_model=BaseResponse[list[CatalogEntityResponse], dict])
+@router.get(
+    "/entities",
+    response_model=BaseResponse[list[CatalogEntityResponse], dict],
+    dependencies=[Depends(require_development)],
+)
 def list_entities(request: Request) -> BaseResponse[list[CatalogEntityResponse], dict]:
     settings = get_settings()
     repository = FabricSqlConnection(
@@ -103,7 +113,11 @@ def list_entities(request: Request) -> BaseResponse[list[CatalogEntityResponse],
     return BaseResponse[list[CatalogEntityResponse], dict].model_validate(payload)
 
 
-@router.post("/query", response_model=BaseResponse[SqlResultResponse, dict])
+@router.post(
+    "/query",
+    response_model=BaseResponse[SqlResultResponse, dict],
+    dependencies=[Depends(require_development)],
+)
 def query_entity(
     query_request: EntityQueryRequest,
     request: Request,
@@ -144,7 +158,7 @@ def query_entity(
     payload = build_response_payload(
         data={
             "entity": result.entity,
-            "sql": result.sql,
+            "sql": result.sql if settings.is_development else None,
             "columns": result.columns,
             "rows": result.rows,
             "rowCount": result.row_count,

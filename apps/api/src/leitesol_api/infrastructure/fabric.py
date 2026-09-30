@@ -1,9 +1,12 @@
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from leitesol_api.domain.measure import Measure
 from leitesol_api.domain.sql_result import CatalogEntity, SqlResult
+
+if TYPE_CHECKING:
+    from leitesol_api.infrastructure.settings import Settings
 
 logger = logging.getLogger("leitesol.api.fabric")
 
@@ -46,25 +49,18 @@ RUNTIME_TABLES = (
     "AGT_PARAM_FECHAMENTO",
 )
 
-MANAGEMENT_TABLES = (
-    "AGT_GESTAO_SKILL",
-    "AGT_GESTAO_OPERACAO",
-    "AGT_GESTAO_MEDIDA",
-    "AGT_GESTAO_DIMENSAO",
-    "AGT_GESTAO_RELACIONAMENTO",
-    "AGT_GESTAO_MAPA_CAMPO",
-    "AGT_GESTAO_PENDENCIA",
-)
+# As AGT_GESTAO_* ficam fora do agente (D-A15): 14_permissao_agente.sql
+# aplica DENY nelas para a identidade do agente. Não reintroduzir aqui.
 
-# Views declaradas em 02_views_analiticas.sql.
+# Views declaradas em 02_views_analiticas.sql. As views de segurança
+# (vw_hierarquia_equipe, vw_rls_alcance) cruzam e-mail x equipe e servem só
+# para resolver a alçada no backend; nunca são consultáveis por rota ou LLM.
 ANALYTICAL_VIEWS = (
     "vw_dim_calendario",
     "vw_dim_cliente",
     "vw_dim_produto",
     "vw_dim_representante",
     "vw_dim_supervisor",
-    "vw_hierarquia_equipe",
-    "vw_rls_alcance",
     "vw_dim_segmento",
     "vw_dim_geografia",
     "vw_dim_filial",
@@ -74,10 +70,22 @@ ANALYTICAL_VIEWS = (
 
 CATALOG_ENTITIES = (
     *_table_entities(RUNTIME_TABLES),
-    *_table_entities(MANAGEMENT_TABLES),
     *_view_entities(ANALYTICAL_VIEWS),
 )
 ENTITY_BY_NAME = {entity.name: entity for entity in CATALOG_ENTITIES}
+
+
+def build_fabric_connection(settings: "Settings") -> "FabricSqlConnection":
+    return FabricSqlConnection(
+        server=settings.fabric_server,
+        database=settings.fabric_database,
+        driver=settings.fabric_driver,
+        authentication=settings.fabric_authentication,
+        client_id=settings.entra_client_id,
+        tenant_id=settings.entra_tenant_id,
+        client_secret=settings.entra_client_secret,
+        timeout=settings.fabric_connection_timeout,
+    )
 
 
 class FabricSqlConnection:
@@ -157,6 +165,31 @@ class FabricSqlConnection:
 
     def list_entities(self) -> list[CatalogEntity]:
         return list(CATALOG_ENTITIES)
+
+    def fetch(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        """Executa SQL fixo do backend com parâmetros posicionais (?).
+
+        Só para consultas escritas no código (catálogo, alçada, operações):
+        o texto do SQL nunca vem do usuário nem da LLM, e todo valor variável
+        entra como parâmetro do driver.
+        """
+        try:
+            import pyodbc
+
+            with pyodbc.connect(self._connection_string(), timeout=self._timeout) as connection:
+                cursor = connection.cursor()
+                cursor.execute(sql, params)
+                columns = [column[0] for column in cursor.description]
+                return [
+                    {
+                        column: self._json_value(value)
+                        for column, value in zip(columns, row, strict=True)
+                    }
+                    for row in cursor.fetchall()
+                ]
+        except Exception as error:
+            logger.exception("Fabric fixed query failed database=%s", self._database)
+            raise FabricConnectionError("Unable to query the Fabric warehouse.") from error
 
     def describe_entity(self, entity: str) -> list[str]:
         selected_entity = self._get_entity(entity)
