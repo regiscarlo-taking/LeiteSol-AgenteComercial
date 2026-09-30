@@ -12,10 +12,12 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from leitesol_api.application.operations.base import SqlFetcher, normalize_term
-from leitesol_api.domain.agent import Scope
+from leitesol_agent.application.operations.base import SqlFetcher, normalize_term
+from leitesol_agent.domain.models import Scope
 
-# Início da base histórica da vw_fato_faturamento (Data >= 2025-01-01).
+# Piso da base histórica da vw_fato_faturamento (Data >= 2025-01-01), e não um
+# ano fixo: nenhuma consulta filtra por ele. Serve só para avisar (BASE2025)
+# quando a janela pedida começa antes de haver dado.
 HISTORY_START = date(2025, 1, 1)
 
 FAT_RS = "f.Vendas_R - f.Dev_R"

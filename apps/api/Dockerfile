@@ -20,13 +20,15 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/*
 
+# A API importa o agente (apps/agent) como biblioteca.
+COPY apps/agent /app/apps/agent
 COPY apps/api /app/apps/api
 
 FROM base AS dev
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /app/apps/api/requirements-dev.txt \
-    && pip install --no-cache-dir -e /app/apps/api
+    && pip install --no-cache-dir -e /app/apps/agent -e /app/apps/api
 
 WORKDIR /app/apps/api
 
@@ -37,7 +39,7 @@ CMD ["sh", "-c", "python -m uvicorn leitesol_api.main:app --host 0.0.0.0 --port 
 FROM base AS prod
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir /app/apps/api \
+    && pip install --no-cache-dir /app/apps/agent /app/apps/api \
     && useradd --system --uid 10001 --no-create-home app
 
 WORKDIR /app/apps/api

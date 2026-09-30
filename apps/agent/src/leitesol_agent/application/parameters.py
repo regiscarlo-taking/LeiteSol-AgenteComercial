@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from leitesol_api.domain.agent import Operation, Parameter
+from leitesol_agent.domain.models import Operation, Parameter
 
 
 @dataclass(slots=True)

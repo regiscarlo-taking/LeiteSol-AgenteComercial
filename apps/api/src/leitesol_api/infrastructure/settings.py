@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     storage_account_url: str = ""
     storage_container_name: str = ""
     storage_blob_prefix: str = ""
+    # Registro de consumo da LLM por pergunta (tokens, sem conteúdo). Vai sempre
+    # para o log da aplicação; para o Blob, só com o container privado.
+    usage_log_to_blob: bool = False
+    # Preço por milhão de tokens do modelo configurado; 0 = custo não estimado.
+    gemini_input_price_per_mtok: float = 0.0
+    gemini_output_price_per_mtok: float = 0.0
     fabric_driver: str = "ODBC Driver 18 for SQL Server"
     fabric_connection_timeout: int = 10
     # "local" (login admin + JWT próprio) só existe em development; fora dele o

@@ -4,12 +4,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from leitesol_agent.application.answer_question import AnswerQuestion
+from leitesol_agent.domain.models import AgentResponse, ResponseStatus
 
-from leitesol_api.application.answer_question import AnswerQuestion
-from leitesol_api.domain.agent import AgentResponse, ResponseStatus
 from leitesol_api.infrastructure.auth import TokenData, verify_token
 from leitesol_api.infrastructure.fabric import FabricConnectionError
 from leitesol_api.infrastructure.gemini import GeminiError
+from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.infrastructure.usage_log import record_usage
 from leitesol_api.interfaces.http.routes.questions import answer_question_factory
 from leitesol_api.interfaces.responses import build_response_payload
 from leitesol_api.interfaces.schemas import ChatQueryRequest
@@ -66,6 +68,7 @@ def query_chat(
             full_access=user.full_access,
             correlation_id=correlation_id,
         )
+        record_usage(response, get_settings())
         status_code = 200
     except Exception as error:
         known = isinstance(error, (FabricConnectionError, GeminiError))

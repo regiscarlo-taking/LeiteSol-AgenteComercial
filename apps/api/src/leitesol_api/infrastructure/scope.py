@@ -7,7 +7,7 @@ IA_COMUM.RLS_USUARIO_EQUIPE (via vw_rls_usuario_equipe), não o fecho da
 
 from typing import Any, Protocol
 
-from leitesol_api.domain.agent import Scope
+from leitesol_agent.domain.models import Scope
 
 # O próprio código da equipe entra como vendedor: vw_hierarquia_equipe só
 # ancora (Nivel 0) supervisores que têm subordinado, e uma equipe concedida

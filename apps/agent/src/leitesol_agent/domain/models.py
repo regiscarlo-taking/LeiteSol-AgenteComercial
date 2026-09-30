@@ -9,6 +9,8 @@ from datetime import date
 from enum import StrEnum
 from typing import Any
 
+from leitesol_agent.domain.usage import LlmUsage
+
 
 class ResponseStatus(StrEnum):
     ANSWERED = "respondida"
@@ -100,6 +102,8 @@ class AgentResponse:
     notices: list[Notice] = field(default_factory=list)
     narrative: str | None = None
     question_to_user: str | None = None
+    # Consumo da LLM: vai para o log de uso, não para o contrato da tela.
+    usage: LlmUsage | None = None
 
     def to_contract(self) -> dict[str, Any]:
         period = None

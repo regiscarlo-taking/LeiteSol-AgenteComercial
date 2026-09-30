@@ -10,9 +10,9 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any, Protocol
 
-from leitesol_api.application.operations.base import OperationHandler, SqlFetcher
-from leitesol_api.application.parameters import validate_parameters
-from leitesol_api.domain.agent import (
+from leitesol_agent.application.operations.base import OperationHandler, SqlFetcher
+from leitesol_agent.application.parameters import validate_parameters
+from leitesol_agent.domain.models import (
     AgentResponse,
     Catalog,
     Notice,
@@ -20,8 +20,9 @@ from leitesol_api.domain.agent import (
     ResponseStatus,
     Scope,
 )
+from leitesol_agent.domain.usage import UsageMeter
 
-logger = logging.getLogger("leitesol.api.agent")
+logger = logging.getLogger("leitesol.agent")
 
 OUT_OF_SCOPE_TEXT = (
     "Essa pergunta está fora do que o agente responde hoje. Ele cobre faturamento "
@@ -66,6 +67,7 @@ class AnswerQuestion:
         fetcher: SqlFetcher,
         handlers: dict[str, OperationHandler],
         today: Callable[[], date] = date.today,
+        meter: UsageMeter | None = None,
     ) -> None:
         self._catalog = catalog
         self._scopes = scopes
@@ -73,8 +75,27 @@ class AnswerQuestion:
         self._fetcher = fetcher
         self._handlers = handlers
         self._today = today
+        self._meter = meter
 
     def execute(
+        self,
+        *,
+        question: str,
+        email: str | None,
+        full_access: bool,
+        correlation_id: str,
+    ) -> AgentResponse:
+        response = self._answer(
+            question=question,
+            email=email,
+            full_access=full_access,
+            correlation_id=correlation_id,
+        )
+        if self._meter is not None:
+            response.usage = self._meter.snapshot()
+        return response
+
+    def _answer(
         self,
         *,
         question: str,

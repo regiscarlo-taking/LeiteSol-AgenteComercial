@@ -10,13 +10,13 @@ de desempate), por isso a posição é RANK() e não ROW_NUMBER().
 from datetime import date
 from typing import Any
 
-from leitesol_api.application.operations.base import (
+from leitesol_agent.application.operations.base import (
     OperationResult,
     SqlFetcher,
     month_end_exclusive,
     month_start,
 )
-from leitesol_api.application.operations.common import (
+from leitesol_agent.application.operations.common import (
     FAT_KG,
     FAT_RS,
     UNIVERSE_FROM,
@@ -27,7 +27,7 @@ from leitesol_api.application.operations.common import (
     product_question,
     universe_where,
 )
-from leitesol_api.domain.agent import Notice, Period, Scope
+from leitesol_agent.domain.models import Notice, Period, Scope
 
 # granularidade -> (chave de agrupamento, expressão do nome)
 PARTICIPANTS = {

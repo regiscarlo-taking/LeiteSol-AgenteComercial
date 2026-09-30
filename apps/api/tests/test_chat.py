@@ -4,13 +4,13 @@ from datetime import datetime
 import httpx
 
 from leitesol_api import main
-from leitesol_api.application.answer_question import AnswerQuestion
-from leitesol_api.application.operations import OPERATION_HANDLERS
-from leitesol_api.domain.agent import Scope
+from leitesol_agent.application.answer_question import AnswerQuestion
+from leitesol_agent.application.operations import OPERATION_HANDLERS
+from leitesol_agent.domain.models import Scope
 from leitesol_api.infrastructure.auth import TokenData, verify_token
 from leitesol_api.interfaces.http.routes import questions
 from leitesol_api.interfaces.http.routes.chat import to_chat_payload
-from tests.test_agent import SELLER_SCOPE, FakeCatalog, FakeFetcher, FakeLLM, FixedScope, answer
+from test_agent import SELLER_SCOPE, FakeCatalog, FakeFetcher, FakeLLM, FixedScope, answer
 
 
 def post_chat(use_case_factory) -> httpx.Response:

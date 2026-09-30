@@ -9,13 +9,13 @@ desta fase é a tabela da série: não há gráfico na interface (D-A19).
 from datetime import date
 from typing import Any
 
-from leitesol_api.application.operations.base import (
+from leitesol_agent.application.operations.base import (
     OperationResult,
     SqlFetcher,
     month_end_exclusive,
     month_start,
 )
-from leitesol_api.application.operations.common import (
+from leitesol_agent.application.operations.common import (
     FAT_KG,
     FAT_RS,
     HISTORY_START,
@@ -29,7 +29,7 @@ from leitesol_api.application.operations.common import (
     product_question,
     universe_where,
 )
-from leitesol_api.domain.agent import Notice, Period, Scope
+from leitesol_agent.domain.models import Notice, Period, Scope
 
 
 def months_back(end_month: date, count: int) -> list[date]:

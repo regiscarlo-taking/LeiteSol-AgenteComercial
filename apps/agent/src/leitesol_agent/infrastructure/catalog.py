@@ -10,7 +10,7 @@ import time
 from collections import defaultdict
 from typing import Any, Protocol
 
-from leitesol_api.domain.agent import Catalog, Operation, Parameter
+from leitesol_agent.domain.models import Catalog, Operation, Parameter
 
 OPERATIONS_SQL = """
     SELECT operacao_id, skill_id, intencao_id, nome_tecnico, intencao_negocio, alertas

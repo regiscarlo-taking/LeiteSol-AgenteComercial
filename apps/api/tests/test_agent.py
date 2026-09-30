@@ -8,18 +8,18 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from leitesol_api import main
-from leitesol_api.application.answer_question import AnswerQuestion
-from leitesol_api.application.operations import OPERATION_HANDLERS
-from leitesol_api.application.operations.compare_previous_year import (
+from leitesol_agent.application.answer_question import AnswerQuestion
+from leitesol_agent.application.operations import OPERATION_HANDLERS
+from leitesol_agent.application.operations.compare_previous_year import (
     build_query,
     resolve_period,
     shape_rows,
 )
-from leitesol_api.application.parameters import validate_parameters
-from leitesol_api.domain.agent import Catalog, Operation, Parameter, ResponseStatus, Scope
+from leitesol_agent.application.parameters import validate_parameters
+from leitesol_agent.domain.models import Catalog, Operation, Parameter, ResponseStatus, Scope
 from leitesol_api.infrastructure import auth
 from leitesol_api.infrastructure.auth import TokenData, verify_token
-from leitesol_api.infrastructure.catalog import build_catalog
+from leitesol_agent.infrastructure.catalog import build_catalog
 from leitesol_api.infrastructure.scope import ScopeResolver
 from leitesol_api.infrastructure.settings import Settings
 from leitesol_api.interfaces.http.routes import questions

@@ -10,13 +10,13 @@ como "novo" ou "recuperado": a leitura é do analista.
 
 from typing import Any
 
-from leitesol_api.application.operations.base import (
+from leitesol_agent.application.operations.base import (
     OperationResult,
     SqlFetcher,
     month_end_exclusive,
     month_start,
 )
-from leitesol_api.application.operations.common import (
+from leitesol_agent.application.operations.common import (
     FAT_KG,
     FAT_RS,
     HISTORY_START,
@@ -28,8 +28,8 @@ from leitesol_api.application.operations.common import (
     product_question,
     universe_where,
 )
-from leitesol_api.application.operations.monthly_series import months_back
-from leitesol_api.domain.agent import Notice, Period, Scope
+from leitesol_agent.application.operations.monthly_series import months_back
+from leitesol_agent.domain.models import Notice, Period, Scope
 
 MAX_ROWS = 200
 

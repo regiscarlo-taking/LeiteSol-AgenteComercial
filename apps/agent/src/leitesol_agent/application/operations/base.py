@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Protocol
 
-from leitesol_api.domain.agent import Notice, Period, Scope
+from leitesol_agent.domain.models import Notice, Period, Scope
 
 
 class SqlFetcher(Protocol):

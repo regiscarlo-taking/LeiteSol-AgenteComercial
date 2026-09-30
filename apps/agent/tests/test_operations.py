@@ -3,15 +3,15 @@ from typing import Any
 
 import pytest
 
-from leitesol_api.application.operations.monthly_series import MonthlySeries, months_back
-from leitesol_api.application.operations.rank_clients import RankClients
-from leitesol_api.application.operations.returning_clients import ReturningClients
-from leitesol_api.application.operations.sellers_below_average import (
+from leitesol_agent.application.operations.monthly_series import MonthlySeries, months_back
+from leitesol_agent.application.operations.rank_clients import RankClients
+from leitesol_agent.application.operations.returning_clients import ReturningClients
+from leitesol_agent.application.operations.sellers_below_average import (
     SellersBelowAverage,
     shape_rows as sellers_shape,
 )
-from leitesol_api.application.parameters import validate_parameters
-from leitesol_api.domain.agent import Operation, Parameter, Scope
+from leitesol_agent.application.parameters import validate_parameters
+from leitesol_agent.domain.models import Operation, Parameter, Scope
 
 FULL = Scope(sees_everything=True)
 CARTEIRA = Scope(sees_everything=False, sellers=frozenset({"000123"}), teams=frozenset({"997"}))

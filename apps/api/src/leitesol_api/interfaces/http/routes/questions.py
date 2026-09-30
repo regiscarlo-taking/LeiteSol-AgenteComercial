@@ -4,17 +4,19 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from leitesol_agent.application.answer_question import AnswerQuestion
+from leitesol_agent.application.operations import OPERATION_HANDLERS
+from leitesol_agent.domain.models import AgentResponse, ResponseStatus
+from leitesol_agent.domain.usage import UsageMeter
+from leitesol_agent.infrastructure.catalog import CatalogRepository
 from pydantic import BaseModel, Field
 
-from leitesol_api.application.answer_question import AnswerQuestion
-from leitesol_api.application.operations import OPERATION_HANDLERS
-from leitesol_api.domain.agent import AgentResponse, ResponseStatus
 from leitesol_api.infrastructure.auth import TokenData, verify_token
-from leitesol_api.infrastructure.catalog import CatalogRepository
 from leitesol_api.infrastructure.fabric import FabricConnectionError, build_fabric_connection
 from leitesol_api.infrastructure.gemini import GeminiError, get_gemini_client
 from leitesol_api.infrastructure.scope import ScopeResolver
 from leitesol_api.infrastructure.settings import get_settings
+from leitesol_api.infrastructure.usage_log import record_usage
 from leitesol_api.interfaces.responses import build_response_payload
 
 router = APIRouter(tags=["agente"], dependencies=[Depends(verify_token)])
@@ -34,13 +36,17 @@ def _catalog_repository() -> CatalogRepository:
 
 
 def get_answer_question() -> AnswerQuestion:
+    # A API monta o agente: entrega a conexão, a alçada e a chave da LLM. O
+    # fluxo da pergunta (intenção, parâmetros, operação, redação) é do agente.
     fetcher = build_fabric_connection(get_settings())
+    meter = UsageMeter()
     return AnswerQuestion(
         catalog=_catalog_repository(),
         scopes=ScopeResolver(fetcher),
-        llm=get_gemini_client(),
+        llm=get_gemini_client(meter),
         fetcher=fetcher,
         handlers=OPERATION_HANDLERS,
+        meter=meter,
     )
 
 
@@ -67,6 +73,7 @@ def ask(
             full_access=user.full_access,
             correlation_id=correlation_id,
         )
+        record_usage(response, get_settings())
         status_code = 200
     except Exception as error:
         # Falha técnica (Fabric, Gemini, Key Vault): mensagem genérica e o
