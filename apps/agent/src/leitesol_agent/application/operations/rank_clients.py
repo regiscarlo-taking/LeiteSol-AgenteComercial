@@ -3,8 +3,14 @@
 Regra do catálogo: período obrigatório; "volume" = FAT KG (com toneladas),
 FAT R$ só quando pedido; Top 20 por padrão; participante padrão = cliente +
 loja, CNPJ ou rede só quando a pergunta citar; filtros aplicados ANTES do
-ranking. Empates no limite do Top N continuam visíveis (não há regra oficial
-de desempate), por isso a posição é RANK() e não ROW_NUMBER().
+ranking.
+
+Desempate (Adm. Vendas, 29-09, AIC-289): no mesmo valor da métrica, vence o
+maior FAT R$; persistindo o empate, o nome do cliente em ordem alfabética. O
+código do participante só fecha o empate residual para a ordem ser estável.
+Por isso a posição é ROW_NUMBER() e a lista tem exatamente N posições. A
+consulta traz uma linha a mais (N + 1) só para saber se a regra decidiu quem
+ficou de fora no limite; essa linha não vai para a resposta.
 """
 
 from datetime import date
@@ -37,6 +43,17 @@ PARTICIPANTS = {
 }
 # Métrica do ranking -> coluna agregada que ordena (toneladas ordena igual a KG).
 RANK_COLUMN = {"fat_kg": "fat_kg", "fat_tons": "fat_kg", "fat_rs": "fat_rs"}
+DEFAULT_TOP_N = 20
+
+
+def tie_break_order(rank_column: str) -> str:
+    """ORDER BY do ranking com o desempate oficial (métrica, R$, nome, código)."""
+    keys = [f"{rank_column} DESC"]
+    if rank_column != "fat_rs":
+        keys.append("fat_rs DESC")
+    # Sem nome, o participante vai para o fim do empate em vez de vir antes de "A".
+    keys += ["CASE WHEN participante IS NULL THEN 1 ELSE 0 END", "participante ASC", "participante_id ASC"]
+    return ", ".join(keys)
 
 
 def build_query(
@@ -64,13 +81,14 @@ def build_query(
         ),
         ranked AS (
             SELECT *,
-                   RANK() OVER (ORDER BY {rank_column} DESC) AS posicao,
+                   ROW_NUMBER() OVER (ORDER BY {tie_break_order(rank_column)}) AS posicao,
                    SUM({rank_column}) OVER () AS total_escopo
             FROM base
         )
-        SELECT * FROM ranked WHERE posicao <= ? ORDER BY posicao, participante
+        SELECT * FROM ranked WHERE posicao <= ? ORDER BY posicao
     """
-    params = [period.start, period.end_exclusive, *where.params, values.get("top_n") or 20]
+    top_n = values.get("top_n") or DEFAULT_TOP_N
+    params = [period.start, period.end_exclusive, *where.params, top_n + 1]
     return sql, params
 
 
@@ -137,16 +155,21 @@ class RankClients:
         sql, params = build_query(values, period, scope, product)
         rows = fetcher.fetch(sql, tuple(params))
         metric = values.get("metrica_ranking") or "fat_kg"
-        main_block, non_positive_total = shape_rows(rows, metric)
+        top_n = values.get("top_n") or DEFAULT_TOP_N
+        shown, left_out = rows[:top_n], rows[top_n:top_n + 1]
+        main_block, non_positive_total = shape_rows(shown, metric)
 
         notices: list[Notice] = []
-        top_n = values.get("top_n") or 20
-        if len(rows) > top_n:
+        rank_column = RANK_COLUMN[metric]
+        if shown and left_out and shown[-1][rank_column] == left_out[0][rank_column]:
+            by_rs = rank_column != "fat_rs" and shown[-1]["fat_rs"] != left_out[0]["fat_rs"]
+            criterion = "pelo maior faturamento em R$" if by_rs else "pela ordem alfabética do nome do cliente"
             notices.append(
                 Notice(
-                    "EMPATE",
+                    "DESEMPATE",
                     "operacao",
-                    f"Há empate no limite do ranking: {len(rows)} clientes aparecem para {top_n} posições.",
+                    f"Houve empate na {top_n}ª posição: o desempate foi feito {criterion}, "
+                    "conforme a regra definida pela área comercial.",
                 )
             )
         if non_positive_total:

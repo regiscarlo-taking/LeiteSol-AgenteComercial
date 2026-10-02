@@ -63,13 +63,15 @@ def test_missing_month_asks_for_a_month() -> None:
 
 # ------------------------------------------------------------------ ranking
 
-def test_ranking_keeps_ties_and_computes_share() -> None:
+def test_ranking_applies_tie_break_and_computes_share() -> None:
+    # Consulta devolve N + 1 linhas já ordenadas; B e C empatam em KG na 2ª posição
+    # e B fica por ter mais R$ (regra da Adm. Vendas, AIC-289).
     rows = [
         {"posicao": 1, "participante_id": "A", "participante": "Rede A", "uf": "SP",
          "fat_rs": 300.0, "fat_kg": 600.0, "total_escopo": 1000.0},
         {"posicao": 2, "participante_id": "B", "participante": "Rede B", "uf": "Várias",
          "fat_rs": 200.0, "fat_kg": 200.0, "total_escopo": 1000.0},
-        {"posicao": 2, "participante_id": "C", "participante": "Rede C", "uf": "MG",
+        {"posicao": 3, "participante_id": "C", "participante": "Rede C", "uf": "MG",
          "fat_rs": 100.0, "fat_kg": 200.0, "total_escopo": 1000.0},
     ]
     fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows])
@@ -80,13 +82,57 @@ def test_ranking_keeps_ties_and_computes_share() -> None:
         CARTEIRA,
     )
 
-    sql = fetcher.calls[-1][0]
-    assert "RANK() OVER (ORDER BY fat_kg DESC)" in sql
+    sql, params = fetcher.calls[-1]
+    assert ("ROW_NUMBER() OVER (ORDER BY fat_kg DESC, fat_rs DESC, "
+            "CASE WHEN participante IS NULL THEN 1 ELSE 0 END, participante ASC, participante_id ASC)") in sql
+    assert "RANK()" not in sql
+    assert params[-1] == 3  # N + 1, para saber quem ficou de fora no limite
     assert "GROUP BY c.Rede" in sql
-    assert "EMPATE" in codes(result)
-    first = result.main_block["linhas"][0]
-    assert first["participacao_pct"] == 60.0
-    assert first["fat_tons"] == 0.6
+    lines = result.main_block["linhas"]
+    assert [line["participante_id"] for line in lines] == ["A", "B"]
+    assert "DESEMPATE" in codes(result)
+    assert "faturamento em R$" in next(n for n in result.notices if n.code == "DESEMPATE").text
+    assert lines[0]["participacao_pct"] == 60.0
+    assert lines[0]["fat_tons"] == 0.6
+
+
+def test_ranking_by_rs_breaks_ties_by_name() -> None:
+    rows = [
+        {"posicao": 1, "participante_id": "9", "participante": "ARCOR", "uf": "SP",
+         "fat_rs": 50.0, "fat_kg": 24.0, "total_escopo": 100.0},
+        {"posicao": 2, "participante_id": "1", "participante": "CARINO", "uf": "SP",
+         "fat_rs": 50.0, "fat_kg": 24.0, "total_escopo": 100.0},
+    ]
+    fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows])
+    result = RankClients().run(
+        fetcher,
+        {"periodo_inicio": date(2026, 1, 1), "periodo_fim": date(2026, 1, 31),
+         "metrica_ranking": "fat_rs", "top_n": 1},
+        FULL,
+    )
+
+    sql = fetcher.calls[-1][0]
+    assert "ORDER BY fat_rs DESC, CASE WHEN participante IS NULL" in sql
+    assert "fat_rs DESC, fat_rs DESC" not in sql
+    assert [line["participante"] for line in result.main_block["linhas"]] == ["ARCOR"]
+    assert "ordem alfabética" in next(n for n in result.notices if n.code == "DESEMPATE").text
+
+
+def test_ranking_without_tie_at_the_limit_has_no_notice() -> None:
+    rows = [
+        {"posicao": 1, "participante_id": "A", "participante": "A", "uf": "SP",
+         "fat_rs": 10.0, "fat_kg": 30.0, "total_escopo": 50.0},
+        {"posicao": 2, "participante_id": "B", "participante": "B", "uf": "SP",
+         "fat_rs": 10.0, "fat_kg": 20.0, "total_escopo": 50.0},
+    ]
+    result = RankClients().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows]),
+        {"periodo_inicio": date(2026, 1, 1), "periodo_fim": date(2026, 1, 31), "top_n": 1},
+        FULL,
+    )
+
+    assert len(result.main_block["linhas"]) == 1
+    assert "DESEMPATE" not in codes(result)
 
 
 def test_ranking_without_positive_total_has_no_share() -> None:
