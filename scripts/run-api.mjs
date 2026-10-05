@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const apiSrcPath = path.join(projectRoot, "apps", "api", "src");
+const agentSrcPath = path.join(projectRoot, "apps", "agent", "src");
 const apiPackagesPath = path.join(projectRoot, "apps", "api", ".python_packages");
 const localVenvPython = path.join(projectRoot, "apps", "api", ".venv", "Scripts", "python.exe");
 const defaultHost = "0.0.0.0";
@@ -53,7 +54,7 @@ const options = parseArgs(process.argv.slice(2));
 const withPythonPath = () => ({
   ...process.env,
   PORT: process.env.PORT ?? options.port,
-  PYTHONPATH: [apiSrcPath, apiPackagesPath, process.env.PYTHONPATH]
+  PYTHONPATH: [apiSrcPath, agentSrcPath, apiPackagesPath, process.env.PYTHONPATH]
     .filter(Boolean)
     .join(path.delimiter),
 });

@@ -27,6 +27,7 @@ services:
       LEITESOL_API_STORAGE_BLOB_PREFIX: ${LEITESOL_API_STORAGE_BLOB_PREFIX:-}
     volumes:
       - ./apps/api:/app/apps/api
+      - ./apps/agent:/app/apps/agent
     ports:
       - "5000:5000"
 

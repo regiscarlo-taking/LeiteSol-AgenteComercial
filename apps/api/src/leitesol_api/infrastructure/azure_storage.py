@@ -71,6 +71,13 @@ class BlobStorageGateway:
         self._container.upload_blob(name=blob_name, data=content, overwrite=overwrite)
         return blob_name
 
+    def append_line(self, name: str, line: str) -> None:
+        """Acrescenta uma linha a um append blob, criando-o na primeira vez."""
+        client = self._container.get_blob_client(self._blob_name(name))
+        if not client.exists():
+            client.create_append_blob()
+        client.append_block((line.rstrip("\n") + "\n").encode("utf-8"))
+
     def download(self, name: str) -> bytes:
         return self._container.download_blob(self._blob_name(name)).readall()
 

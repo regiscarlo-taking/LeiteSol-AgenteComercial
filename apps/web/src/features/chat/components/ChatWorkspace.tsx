@@ -87,7 +87,7 @@ export const ChatWorkspace = () => {
 
                   {message.sqlResult ? (
                     <section className="query-result">
-                      <code>{message.sqlResult.sql}</code>
+                      {message.sqlResult.sql ? <code>{message.sqlResult.sql}</code> : null}
                       <div className="result-table-wrap">
                         <table>
                           <thead>

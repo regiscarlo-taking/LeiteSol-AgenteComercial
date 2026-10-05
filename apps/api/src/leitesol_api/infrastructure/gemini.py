@@ -1,15 +1,13 @@
-import json
 from dataclasses import dataclass
 
-import httpx
+from leitesol_agent.domain.usage import UsageMeter
+from leitesol_agent.infrastructure.gemini import GeminiError, GeminiLanguageModel
 
 from leitesol_api.infrastructure.azure_storage import get_key_vault_secret_provider
 from leitesol_api.infrastructure.fabric import CATALOG_ENTITIES
 from leitesol_api.infrastructure.settings import get_settings
 
-
-class GeminiError(RuntimeError):
-    pass
+__all__ = ["GeminiClient", "GeminiError", "GeminiPlan", "get_gemini_client"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +19,13 @@ class GeminiPlan:
     order_direction: str | None
 
 
-class GeminiClient:
-    def __init__(self, api_key: str, model: str) -> None:
-        if not api_key:
-            raise GeminiError("Gemini API key is not configured.")
-        self._api_key = api_key
-        self._model = model
+class GeminiClient(GeminiLanguageModel):
+    """Provedor do agente + o planejador de tabelas do mock inicial.
+
+    As etapas do fluxo vigente (intenção, parâmetros, redação) vivem no
+    módulo do agente. select_entity/plan_query são do navegador de tabelas e
+    não são chamados por nenhuma rota.
+    """
 
     def select_entity(self, question: str) -> str:
         entities = ", ".join(entity.name for entity in CATALOG_ENTITIES)
@@ -90,36 +89,10 @@ class GeminiClient:
             order_direction=order_direction,
         )
 
-    def _generate_json(self, prompt: str) -> dict[str, object]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:generateContent"
-        try:
-            response = httpx.post(
-                url,
-                headers={"x-goog-api-key": self._api_key},
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"responseMimeType": "application/json"},
-                },
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-            result = json.loads(text.strip().removeprefix("```json").removesuffix("```").strip())
-        except httpx.HTTPStatusError as error:
-            raise GeminiError(
-                f"Gemini request failed with status {error.response.status_code}."
-            ) from error
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
-            raise GeminiError("Gemini could not create a query plan.") from error
 
-        if not isinstance(result, dict):
-            raise GeminiError("Gemini returned a non-object JSON response.")
-        return result
-
-
-def get_gemini_client() -> GeminiClient:
+def get_gemini_client(meter: UsageMeter | None = None) -> GeminiClient:
     settings = get_settings()
     api_key = settings.gemini_api_key
     if not api_key and settings.key_vault_url:
         api_key = get_key_vault_secret_provider().get_gemini_api_key(settings)
-    return GeminiClient(api_key=api_key, model=settings.gemini_model)
+    return GeminiClient(api_key=api_key, model=settings.gemini_model, meter=meter)
