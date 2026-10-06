@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from leitesol_agent.application.operations.base import SqlFetcher, normalize_term
+from leitesol_agent.application.where_filters import compile_where_filters
 from leitesol_agent.domain.models import Scope
 
 # Piso da base histórica da vw_fato_faturamento (Data >= 2025-01-01), e não um
@@ -108,7 +109,8 @@ def client_filter(text: str) -> tuple[str, list[Any]]:
         return "c.CNPJRaiz = ?", [digits]
     value = text.strip()
     return (
-        "(c.ClienteId = ? OR c.ClienteCodigo = ? OR c.Rede = ? OR UPPER(c.GrupoVendaDescricao) = ?)",
+        "(c.ClienteId = ? OR c.ClienteCodigo = ? OR c.Rede = ? "
+        "OR UPPER(c.GrupoVendaDescricao) = ?)",
         [value, value, value, normalize_term(value)],
     )
 
@@ -188,7 +190,25 @@ def universe_where(
         where.add("(c.Rede = ? OR c.GrupoVendaCodigo = ?)", value, value)
     if product:
         where.add(product[0], *product[1])
+    filter_clauses, filter_params = compile_where_filters(values.get("where", []))
+    for clause, param in zip(
+        filter_clauses, _group_filter_params(filter_clauses, filter_params), strict=True
+    ):
+        where.add(clause, *param)
     return where
+
+
+def _group_filter_params(clauses: list[str], params: list[Any]) -> list[tuple[Any, ...]]:
+    """Recupera a quantidade de valores parametrizados de cada predicado compilado."""
+    grouped: list[tuple[Any, ...]] = []
+    offset = 0
+    for clause in clauses:
+        count = clause.count("?")
+        grouped.append(tuple(params[offset : offset + count]))
+        offset += count
+    if offset != len(params):
+        raise ValueError("WHERE filter parameters do not match their clauses.")
+    return grouped
 
 
 def as_date(value: Any) -> date:

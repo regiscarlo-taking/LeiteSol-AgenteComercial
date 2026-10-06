@@ -11,8 +11,10 @@ from typing import Any
 
 import httpx
 
+from leitesol_agent.application.where_filters import filter_fields_for_prompt
 from leitesol_agent.domain.models import Catalog, Operation
 from leitesol_agent.domain.usage import UsageMeter
+from leitesol_agent.infrastructure.view_knowledge import retrieve_view_context
 
 
 class GeminiError(RuntimeError):
@@ -59,8 +61,10 @@ class GeminiLanguageModel:
             "Você classifica perguntas sobre faturamento da Leitesol (laticínios) em uma das "
             "intenções abaixo. Responda só JSON com a chave intencao_id: o identificador exato "
             "de uma intenção da lista, ou null se nenhuma corresponder (ex.: pedidos em aberto, "
-            "margem, financeiro, pergunta por dia).\n"
+            "margem, financeiro, pergunta por dia). Use o contexto de views só para compreender "
+            "o domínio; nunca escreva SQL.\n"
             f"Intenções:\n{options}\n\n{self._question_block(question)}"
+            f"\nContexto relevante das views:\n{retrieve_view_context(question)}"
         )
         result = self._generate_json(prompt)
         intent = result.get("intencao_id")
@@ -78,6 +82,7 @@ class GeminiLanguageModel:
             + (f" Valores aceitos: {p.domain}." if p.domain else "")
             for p in operation.parameters
         )
+        view_context = retrieve_view_context(question, operation.business_intent)
         prompt = (
             "Extraia da pergunta os parâmetros da operação abaixo. Responda só JSON com um "
             "objeto cujas chaves são os nomes dos parâmetros. Regras: datas em AAAA-MM-DD; "
@@ -85,8 +90,16 @@ class GeminiLanguageModel:
             f"hoje é {today.isoformat()} - use isso só para resolver referências explícitas como "
             "'este ano' ou 'mês passado'. Se o período não estiver claro, use null: nunca "
             "escolha um período por conta própria. Parâmetro não mencionado = null. Enum só "
-            "com um dos valores aceitos.\n"
-            f"Operação: {operation.business_intent}\nParâmetros:\n{specs}\n\n"
+            "com um dos valores aceitos. Nunca escreva SQL nem altere o filtro de alçada. "
+            "A chave opcional where deve ser uma lista de objetos {campo, operador, valor}; "
+            "use apenas os campos/operadores permitidos abaixo. Se não houver filtro adicional, "
+            "retorne where como []. Não invente nomes de campos. Datas continuam sendo parâmetros "
+            "de período da operação, não filtros where. Operadores: eq igual, ne diferente, "
+            "contains contém, starts_with começa com, gt/gte/lt/lte comparações numéricas, "
+            "in lista de valores e is_null com valor booleano indicando vazio/não vazio.\n"
+            f"Operação: {operation.business_intent}\nParâmetros:\n{specs}\n"
+            f"Campos/operações WHERE permitidos:\n{filter_fields_for_prompt()}\n"
+            f"Contexto relevante das views:\n{view_context}\n\n"
             f"{self._question_block(question)}"
         )
         return self._generate_json(prompt)

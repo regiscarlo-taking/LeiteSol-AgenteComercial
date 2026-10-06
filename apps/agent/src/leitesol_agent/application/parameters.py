@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from leitesol_agent.application.where_filters import validate_where_filters
 from leitesol_agent.domain.models import Operation, Parameter
 
 
@@ -114,5 +115,9 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
             result.values[parameter.name] = str(value)
 
     # Pergunta repetida (ex.: início e fim ausentes) aparece uma vez só.
+    where_filters, filter_questions = validate_where_filters(raw.get("where"))
+    if where_filters:
+        result.values["where"] = where_filters
+    result.questions.extend(filter_questions)
     result.questions = list(dict.fromkeys(result.questions))
     return result

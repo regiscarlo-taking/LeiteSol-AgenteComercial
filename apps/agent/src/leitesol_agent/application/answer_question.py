@@ -8,10 +8,12 @@ alçada, validação, execução e ressalvas são código determinístico.
 import logging
 from collections.abc import Callable
 from datetime import date
+from decimal import Decimal
 from typing import Any, Protocol
 
 from leitesol_agent.application.operations.base import OperationHandler, SqlFetcher
 from leitesol_agent.application.parameters import validate_parameters
+from leitesol_agent.application.where_filters import WhereFilter
 from leitesol_agent.domain.models import (
     AgentResponse,
     Catalog,
@@ -187,13 +189,31 @@ class AnswerQuestion:
         except Exception:
             logger.exception("Narrative composition failed correlation_id=%s", correlation_id)
             response.notices.append(
-                Notice("NARRATIVA", "resposta", "O resumo em texto não pôde ser gerado; os dados estão abaixo.")
+                Notice(
+                    "NARRATIVA",
+                    "resposta",
+                    "O resumo em texto não pôde ser gerado; os dados estão abaixo.",
+                )
             )
         return response
 
 
 def _serializable(values: dict[str, Any]) -> dict[str, Any]:
-    return {
-        key: value.isoformat() if isinstance(value, date) else value
-        for key, value in values.items()
-    }
+    def serialize(value: Any) -> Any:
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, WhereFilter):
+            return {
+                "campo": value.field,
+                "operador": value.operator,
+                "valor": serialize(value.value),
+            }
+        if isinstance(value, dict):
+            return {key: serialize(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [serialize(item) for item in value]
+        return value
+
+    return {key: serialize(value) for key, value in values.items()}
