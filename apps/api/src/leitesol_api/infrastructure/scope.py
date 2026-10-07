@@ -1,8 +1,10 @@
 """Resolução de alçada: usuário autenticado -> carteira de vendedores (RT34).
 
-Roda ANTES de qualquer consulta de dado. A concessão é a lista explícita de
-IA_COMUM.RLS_USUARIO_EQUIPE (via vw_rls_usuario_equipe), não o fecho da
-árvore do gestor logado (P-RLSGRANT).
+Roda ANTES de qualquer consulta de dado. A concessão é a lista explícita da
+planilha de RLS, copiada para IA_COMERCIAL.RLS_USUARIO_EQUIPE no Warehouse
+(lida via vw_rls_usuario_equipe), não o fecho da árvore do gestor logado
+(P-RLSGRANT). A tabela do cliente não chegou ao espelho; a cópia é estática
+(D-A59, P-RLSCOPIA).
 """
 
 from typing import Any, Protocol
