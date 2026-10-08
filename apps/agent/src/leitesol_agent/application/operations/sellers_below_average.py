@@ -52,7 +52,7 @@ def build_query(
     current = "f.Data >= ? AND f.Data < ?"
     history = "f.Data >= ? AND f.Data < ?"
     sql = f"""
-        SELECT f.VendedorId AS vendedor_id,
+        SELECT c.RCAAtual AS vendedor_id,
                MAX(r.Representante) AS vendedor,
                MAX(r.PapelComercial) AS papel,
                SUM(CASE WHEN {current} THEN {FAT_RS} ELSE 0 END) AS fat_rs_mes,
@@ -61,7 +61,7 @@ def build_query(
                SUM(CASE WHEN {history} THEN {FAT_KG} ELSE 0 END) AS fat_kg_3m
         {UNIVERSE_FROM}
         WHERE f.Data >= ? AND f.Data < ?
-{where.sql}        GROUP BY f.VendedorId
+{where.sql}        GROUP BY c.RCAAtual
     """
     windows = [reference_start, reference_end, history_start, reference_start]
     params = [*windows, *windows, history_start, reference_end, *where.params]

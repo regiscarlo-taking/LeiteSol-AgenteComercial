@@ -48,7 +48,7 @@ GRANULARITY_COLUMNS: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
     "produto": (("p.ProdutoId", "produto_id", "Código"), ("p.Produto", "produto", "Produto")),
     "vendedor": (
-        ("f.VendedorId", "vendedor_id", "Código"),
+        ("c.RCAAtual", "vendedor_id", "Código"),
         ("r.Representante", "vendedor", "Vendedor"),
     ),
     "uf": (("c.UF", "uf", "UF"),),

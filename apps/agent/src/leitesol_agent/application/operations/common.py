@@ -5,6 +5,11 @@ cliente, só Produto Acabado (RT13), sem cadastro de exterior (RT14) e dentro
 da carteira do usuário (RT34) - e aceita os mesmos filtros opcionais. Manter
 isso num lugar só garante que duas operações nunca respondam sobre universos
 diferentes para a mesma pergunta.
+
+A venda é atribuída ao vendedor ATUAL do cliente (vw_dim_cliente.RCAAtual =
+BISA1.A1_VEND), como faz o Power BI na coluna "vend atual" - nunca ao vendedor
+que faturou (f.VendedorId). Vale para o recorte de alçada, para o filtro de
+vendedor e para todo agrupamento por vendedor (AIC-290, 07-10).
 """
 
 from dataclasses import dataclass, field
@@ -28,7 +33,7 @@ UNIVERSE_FROM = """
     FROM [IA_COMERCIAL].[vw_fato_faturamento] f
     JOIN [IA_COMERCIAL].[vw_dim_produto] p ON p.ProdutoId = f.ProdutoId
     JOIN [IA_COMERCIAL].[vw_dim_cliente] c ON c.ClienteId = f.ClienteId
-    LEFT JOIN [IA_COMERCIAL].[vw_dim_representante] r ON r.RepresentanteId = f.VendedorId
+    LEFT JOIN [IA_COMERCIAL].[vw_dim_representante] r ON r.RepresentanteId = c.RCAAtual
 """
 
 METRICS = {
@@ -161,7 +166,7 @@ def universe_where(
     where.add("c.FlagExterior = 0")
     if not scope.sees_everything:
         sellers = sorted(scope.sellers)
-        where.add(f"f.VendedorId IN ({', '.join('?' for _ in sellers)})", *sellers)
+        where.add(f"c.RCAAtual IN ({', '.join('?' for _ in sellers)})", *sellers)
 
     if values.get("uf"):
         where.add("c.UF = ?", values["uf"].strip().upper())
@@ -175,7 +180,7 @@ def universe_where(
         )
     if values.get("vendedor_rca"):
         where.add(
-            "(f.VendedorId = ? OR UPPER(r.Representante) = ?)",
+            "(c.RCAAtual = ? OR UPPER(r.Representante) = ?)",
             values["vendedor_rca"].strip(),
             normalize_term(values["vendedor_rca"]),
         )
