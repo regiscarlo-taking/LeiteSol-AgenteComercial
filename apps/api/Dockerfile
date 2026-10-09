@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -20,6 +20,8 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/*
 
+FROM runtime AS base
+
 # A API importa o agente (apps/agent) como biblioteca.
 COPY apps/agent /app/apps/agent
 COPY apps/api /app/apps/api
@@ -36,13 +38,25 @@ EXPOSE 5000
 
 CMD ["sh", "-c", "python -m uvicorn leitesol_api.main:app --host 0.0.0.0 --port ${PORT:-5000} --reload"]
 
-FROM base AS prod
+# Instala agente + API num venv separado; a imagem final leva so o venv,
+# sem o codigo-fonte, o pip de build e os arquivos do projeto.
+FROM python:3.12-slim AS build
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir /app/apps/agent /app/apps/api \
-    && useradd --system --uid 10001 --no-create-home app
+COPY apps/agent /src/apps/agent
+COPY apps/api /src/apps/api
 
-WORKDIR /app/apps/api
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir /src/apps/agent /src/apps/api
+
+FROM runtime AS prod
+
+ENV PATH=/opt/venv/bin:$PATH
+
+COPY --from=build /opt/venv /opt/venv
+
+RUN useradd --system --uid 10001 --no-create-home app
+
+WORKDIR /app
 
 USER app
 

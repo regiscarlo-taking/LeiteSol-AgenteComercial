@@ -13,3 +13,20 @@ __pycache__
 coverage
 *.pyc
 .env
+
+# Fora da imagem (AIC-306): historico, documentacao e testes nao vao para
+# producao. No compose de dev, apps/api e apps/agent entram por volume, entao
+# os testes continuam disponiveis dentro do container de dev.
+.git
+.vscode
+.github
+docs
+apps/api/tests
+apps/agent/tests
+
+# Sem "**/" o padrao so casa na raiz do contexto; estes aparecem nas subpastas.
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
