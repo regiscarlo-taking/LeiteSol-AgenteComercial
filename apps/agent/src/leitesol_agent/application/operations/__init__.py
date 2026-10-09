@@ -1,6 +1,7 @@
 from leitesol_agent.application.operations.base import OperationHandler
 from leitesol_agent.application.operations.compare_previous_year import CompareWithPreviousYear
 from leitesol_agent.application.operations.monthly_series import MonthlySeries
+from leitesol_agent.application.operations.product_mix import ProductMix
 from leitesol_agent.application.operations.rank_clients import RankClients
 from leitesol_agent.application.operations.returning_clients import ReturningClients
 from leitesol_agent.application.operations.sellers_below_average import SellersBelowAverage
@@ -14,6 +15,7 @@ OPERATION_HANDLERS: dict[str, OperationHandler] = {
         CompareWithPreviousYear(),
         RankClients(),
         MonthlySeries(),
+        ProductMix(),
         SellersBelowAverage(),
     )
 }

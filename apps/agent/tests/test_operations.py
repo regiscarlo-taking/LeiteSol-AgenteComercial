@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from leitesol_agent.application.operations.monthly_series import MonthlySeries, months_back
+from leitesol_agent.application.operations.product_mix import ProductMix, window
 from leitesol_agent.application.operations.rank_clients import RankClients
 from leitesol_agent.application.operations.returning_clients import ReturningClients
 from leitesol_agent.application.operations.sellers_below_average import (
@@ -209,6 +210,7 @@ def test_returning_clients_warns_when_window_precedes_base() -> None:
         (MonthlySeries(), {"filtro_produto": "xpto"}),
         (SellersBelowAverage(), {"mes_referencia": date(2026, 7, 1), "filtro_produto": "xpto"}),
         (ReturningClients(), {"periodo_referencia": date(2026, 7, 1), "filtro_produto": "xpto"}),
+        (ProductMix(), {"escopo_cliente": "000001", "filtro_produto": "xpto"}),
     ],
 )
 def test_unknown_product_term_becomes_clarification(handler, values) -> None:
@@ -217,3 +219,135 @@ def test_unknown_product_term_becomes_clarification(handler, values) -> None:
     result = handler.run(CheckingFetcher(responses), values, FULL)
 
     assert result.question_to_user
+
+
+# ------------------------------------------------------------------ mix (OP11)
+
+def mix_row(item, familia, ordem, fat_rs, fat_kg, meses=1, ultima="2026-08-01", produto=None):
+    return {"item_id": item, "produto": produto or f"Produto {item}", "familia": familia,
+            "grupamento": "G", "subtotal": "S", "ordem_subtotal": 1, "ordem_grupamento": 1,
+            "ordem_familia": ordem, "uf": "SP", "fat_rs": fat_rs, "fat_kg": fat_kg,
+            "meses_com_compra": meses, "ultima_compra": ultima}
+
+
+MIX_ROWS = [
+    mix_row("A", ".02 ZL LPI", 2, 500.0, 900.0),
+    mix_row("B", ".01 LPI", 1, 100.0, 50.0),
+    mix_row("C", ".01 LPI", 1, 400.0, 300.0, meses=3),
+    mix_row("D", None, None, 1000.0, 2000.0),
+]
+
+
+def test_mix_window_skips_current_month_and_follows_closing() -> None:
+    # Outubro aberto e setembro ainda não fechado: a janela termina em agosto.
+    assert window(date(2026, 10, 9), 3, date(2026, 8, 1), False) == (
+        date(2026, 6, 1), date(2026, 9, 1))
+    assert window(date(2026, 10, 9), 3, date(2026, 9, 1), False) == (
+        date(2026, 7, 1), date(2026, 10, 1))
+    assert window(date(2026, 10, 9), 3, date(2026, 9, 1), True) == (
+        date(2026, 8, 1), date(2026, 11, 1))
+
+
+def test_mix_default_order_is_tree_then_kg() -> None:
+    fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, list(MIX_ROWS)])
+    result = ProductMix().run(
+        fetcher,
+        {"escopo_cliente": "000001", "data_referencia": date(2026, 10, 9),
+         "nivel_produto": "sku", "janela_meses": 3},
+        CARTEIRA,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert "HAVING MAX(CASE WHEN fat_rs > 0 THEN 1 ELSE 0 END) = 1" in sql
+    assert "GROUP BY p.ProdutoId, f.Data" in sql
+    assert params[:2] == (date(2026, 6, 1), date(2026, 9, 1))
+    assert "000123" in params and "000001" in params
+    lines = result.main_block["linhas"]
+    # .01 LPI (C antes de B por KG), depois .02 ZL LPI, e o item sem árvore por último.
+    assert [line["item_id"] for line in lines] == ["C", "B", "A", "D"]
+    assert lines[0]["participacao_kg_pct"] == 9.23  # 300 de 3.250 KG
+    assert lines[0]["meses_com_compra"] == 3
+    assert lines[0]["ultima_compra"] == "2026-08"
+    assert "MIX_PRESENCA" in codes(result)
+    assert result.period.last_closed_month == "2026-08"
+
+
+def test_mix_fat_rs_orders_inside_family_by_rs() -> None:
+    rows = [mix_row("B", ".01 LPI", 1, 400.0, 50.0), mix_row("C", ".01 LPI", 1, 100.0, 300.0)]
+    result = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows]),
+        {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9),
+         "metrica_principal": "fat_rs"},
+        FULL,
+    )
+
+    assert [line["item_id"] for line in result.main_block["linhas"]] == ["B", "C"]
+
+
+@pytest.mark.parametrize(
+    "ordering, expected",
+    [
+        ("maior volume", ["D", "A", "C", "B"]),
+        ("faturamento em R$", ["D", "A", "C", "B"]),
+        ("meses com compra", ["C", "D", "A", "B"]),
+        ("descrição", ["A", "B", "C", "D"]),
+    ],
+)
+def test_mix_alternative_orderings(ordering, expected) -> None:
+    result = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, list(MIX_ROWS)]),
+        {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9), "ordenacao": ordering},
+        FULL,
+    )
+
+    assert [line["item_id"] for line in result.main_block["linhas"]] == expected
+
+
+def test_mix_unknown_ordering_and_subgroup_become_questions() -> None:
+    values = {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9)}
+    by_color = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, list(MIX_ROWS)]),
+        {**values, "ordenacao": "cor"},
+        FULL,
+    )
+    subgroup = ProductMix().run(CheckingFetcher([]), {**values, "nivel_produto": "subgrupo"}, FULL)
+
+    assert "cor" in by_color.question_to_user
+    assert "grupamento" in subgroup.question_to_user
+
+
+def test_mix_family_level_drops_product_column_and_warns_status() -> None:
+    rows = [mix_row(".01 LPI", ".01 LPI", 1, 100.0, 10.0)]
+    fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows])
+    result = ProductMix().run(
+        fetcher,
+        {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9), "nivel_produto": "familia",
+         "status_produto": "bloqueado"},
+        FULL,
+    )
+
+    assert "GROUP BY p.Familia, f.Data" in fetcher.calls[-1][0]
+    assert "produto" not in result.main_block["linhas"][0]
+    assert "produto" not in {column["id"] for column in result.main_block["colunas"]}
+    assert "STATUS_PRODUTO" in codes(result)
+
+
+def test_mix_without_purchase_and_partial_month() -> None:
+    result = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, [{"TemParcial": 1}], []]),
+        {"escopo_cliente": "x", "data_referencia": date(2025, 2, 1), "incluir_mes_atual": True},
+        FULL,
+    )
+
+    assert {"SEM_COMPRA", "TR02", "BASE2025"} <= codes(result)
+    assert "PARTICIPACAO" not in codes(result)
+
+
+def test_enum_domain_is_case_insensitive() -> None:
+    op = Operation("OP11", "SK03", "x", "x", "x", None,
+                   parameters=(Parameter("nivel_produto", "enum", False,
+                                         "SKU|FAMILIA|GRUPO|SUBGRUPO", "SKU", "Nivel"),))
+
+    assert validate_parameters(op, {}).values == {"nivel_produto": "sku"}
+    mixed_case = validate_parameters(op, {"nivel_produto": "Familia"})
+    assert mixed_case.values == {"nivel_produto": "familia"}

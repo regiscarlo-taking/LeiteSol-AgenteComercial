@@ -94,8 +94,9 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
                 continue
             result.values[parameter.name] = parsed
         elif parameter.kind == "enum":
+            # O domínio mistura caixas (fat_rs | SKU|FAMILIA): compara sem caixa.
             normalized = str(value).strip().lower()
-            if normalized not in parameter.enum_values:
+            if normalized not in {option.lower() for option in parameter.enum_values}:
                 result.questions.append(_missing_question(parameter))
                 continue
             result.values[parameter.name] = normalized
