@@ -18,7 +18,7 @@ class ViewKnowledge:
 VIEW_KNOWLEDGE = (
     ViewKnowledge(
         "vw_fato_faturamento",
-        "Faturamento consolidado por cliente, produto, vendedor da venda e mês.",
+        "Faturamento consolidado por cliente, produto, vendedor que faturou e mês.",
         "Base das consultas; une cliente por ClienteId, produto por ProdutoId e calendário "
         "por Data.",
         "Data, ClienteId, ProdutoId, VendedorId, UFVenda, Vendas_R, Dev_R, Vendas_Kg, "
@@ -41,7 +41,8 @@ VIEW_KNOWLEDGE = (
         "FlagExterior.",
         "Rede agrupa lojas do mesmo grupo de venda ou raiz de CNPJ. "
         "UF/região/município são do cadastro "
-        "atual, não necessariamente da venda. RCAAtual pode diferir do vendedor histórico. "
+        "atual, não necessariamente da venda. RCAAtual é o vendedor a quem a venda é "
+        "atribuída, como no Power BI. "
         "Exterior é excluído.",
         (
             "cliente",
@@ -108,13 +109,14 @@ VIEW_KNOWLEDGE = (
     ),
     ViewKnowledge(
         "vw_dim_representante",
-        "Representante que realizou a venda, papel comercial, gestor e situação "
-        "cadastral.",
-        "RepresentanteId liga-se ao VendedorId da fato.",
+        "Vendedor atual do cliente (a quem a venda é atribuída), papel comercial, gestor "
+        "e situação cadastral.",
+        "RepresentanteId liga-se ao RCAAtual de vw_dim_cliente.",
         "RepresentanteId, Representante, PapelComercial (RCA, gestor que vende ou sem "
         "gestor), GestorId, Gestor, UF, Ativo.",
-        "VendedorId da fato identifica quem vendeu; RCAAtual no cadastro de cliente é o "
-        "responsável atual pela carteira e pode ser diferente.",
+        "Toda análise por vendedor usa o RCAAtual do cliente, como no Power BI; quando o "
+        "cliente muda de carteira, o histórico dele vai para o novo vendedor. VendedorId da "
+        "fato é só quem faturou.",
         (
             "vendedor",
             "vendedores",

@@ -149,7 +149,7 @@ def test_query_applies_universe_filters_and_scope() -> None:
 
     assert "p.FlagProdutoAcabado = 1" in plan.sql  # RT13
     assert "c.FlagExterior = 0" in plan.sql  # RT14
-    assert "f.VendedorId IN (?, ?)" in plan.sql  # RT34
+    assert "c.RCAAtual IN (?, ?)" in plan.sql  # RT34, vendedor atual do cliente
     assert "GROUP BY c.UF" in plan.sql
     assert plan.sql.count("?") == len(plan.params)
     assert "SP" in plan.params
@@ -160,7 +160,7 @@ def test_full_scope_has_no_seller_filter() -> None:
     period, _ = resolve_period({"periodo_inicio": date(2026, 6, 1), "periodo_fim": date(2026, 6, 30)})
     plan = build_query({}, period, Scope(sees_everything=True))
 
-    assert "VendedorId IN" not in plan.sql
+    assert "RCAAtual IN" not in plan.sql
     assert plan.sql.count("?") == len(plan.params)
 
 

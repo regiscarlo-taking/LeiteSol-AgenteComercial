@@ -176,6 +176,18 @@ def test_sellers_query_filters_role_and_scope() -> None:
     assert "SEM_TRANSACAO" in codes(result)
 
 
+def test_sellers_are_the_client_current_seller() -> None:
+    # AIC-290: a venda é do vendedor atual do cliente, como no Power BI.
+    fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, []])
+    SellersBelowAverage().run(fetcher, {"mes_referencia": date(2026, 7, 1)}, CARTEIRA)
+
+    sql, _ = fetcher.calls[-1]
+    assert "r.RepresentanteId = c.RCAAtual" in sql
+    assert "GROUP BY c.RCAAtual" in sql
+    assert "c.RCAAtual IN (?)" in sql
+    assert "f.VendedorId" not in sql
+
+
 # ------------------------------------------------------------------ retomada
 
 def test_returning_clients_window_and_notices() -> None:

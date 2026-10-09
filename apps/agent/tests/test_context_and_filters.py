@@ -50,7 +50,7 @@ def test_where_filter_is_validated_and_compiled_as_a_parameter() -> None:
         date(2026, 2, 1),
         CARTEIRA,
     )
-    assert "f.VendedorId IN (?)" in scoped_sql
+    assert "c.RCAAtual IN (?)" in scoped_sql
     assert scoped_params[-3:] == ["000123", "SP", Decimal("1.5")]
 
 

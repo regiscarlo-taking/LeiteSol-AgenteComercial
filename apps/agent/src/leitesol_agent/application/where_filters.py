@@ -30,7 +30,10 @@ FILTER_FIELDS: dict[str, FilterField] = {
     field.key: field
     for field in (
         FilterField(
-            "fato.vendedor_id", "vw_fato_faturamento", "código do vendedor da venda", "f.VendedorId"
+            "fato.vendedor_id",
+            "vw_fato_faturamento",
+            "código de quem faturou (só conferência; a venda é do cliente.rca_atual)",
+            "f.VendedorId",
         ),
         FilterField("fato.uf_venda", "vw_fato_faturamento", "UF registrada na venda", "f.UFVenda"),
         FilterField("cliente.id", "vw_dim_cliente", "código do cliente/loja", "c.ClienteId"),
