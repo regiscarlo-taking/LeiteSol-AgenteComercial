@@ -409,3 +409,17 @@ def test_enum_domain_is_case_insensitive() -> None:
     assert validate_parameters(op, {}).values == {"nivel_produto": "sku"}
     mixed_case = validate_parameters(op, {"nivel_produto": "Familia"})
     assert mixed_case.values == {"nivel_produto": "familia"}
+
+
+def test_mix_strips_trailing_spaces_from_source_text() -> None:
+    rows = [mix_row("655", ".01. LPI - LS - FRACIONADO ", 1, 10.0, 5.0,
+                    produto="LEITE EM PO INTEGRAL LA SERENISSIMA 12X700G      ")]
+    result = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows]),
+        {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9)},
+        FULL,
+    )
+
+    line = result.main_block["linhas"][0]
+    assert line["produto"] == "LEITE EM PO INTEGRAL LA SERENISSIMA 12X700G"
+    assert line["familia"] == ".01. LPI - LS - FRACIONADO"
