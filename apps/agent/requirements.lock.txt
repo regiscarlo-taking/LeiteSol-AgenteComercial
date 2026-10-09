@@ -1,13 +1,24 @@
-annotated-types==0.7.0
-colorama==0.4.6
-iniconfig==2.3.0
-packaging==26.2
-pluggy==1.6.0
-pydantic==2.13.4
-pydantic-core==2.46.4
-pydantic-settings==2.14.2
-pygments==2.20.0
-pytest==8.4.2
-python-dotenv==1.2.2
-typing-extensions==4.16.0
-typing-inspection==0.4.2
+# Versões travadas do agente (dependências de execução, sem as de teste).
+# Gerado com uv a partir de apps/agent/requirements.txt; vale para Linux e
+# Windows. Não editar à mão. Regenerar, a partir da raiz do repositório:
+#   uv pip compile --universal --python-version 3.12 --no-header \
+#       apps/agent/requirements.txt -o apps/agent/requirements.lock.txt
+# e manter o cabeçalho acima.
+anyio==4.15.1
+    # via httpx
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via -r apps/agent/requirements.txt
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+typing-extensions==4.16.0 ; python_full_version < '3.15'
+    # via anyio
