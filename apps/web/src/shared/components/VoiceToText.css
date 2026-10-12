@@ -1,0 +1,52 @@
+.voice-to-text {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  min-width: 4.75rem;
+}
+
+.voice-to-text__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 3rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(245, 236, 217, 0.16);
+  border-radius: 16px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.voice-to-text__button:hover:not(:disabled) {
+  border-color: rgba(255, 190, 128, 0.6);
+}
+
+.voice-to-text__button.is-listening {
+  border-color: rgba(255, 130, 110, 0.75);
+  color: #ffd0c8;
+  background: rgba(170, 54, 45, 0.18);
+}
+
+.voice-to-text__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.voice-to-text__status {
+  min-height: 1rem;
+  color: rgba(245, 236, 217, 0.68);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.voice-to-text__status[role="alert"] {
+  max-width: 12rem;
+  color: #ffb0a3;
+}
+
+@media (max-width: 720px) {
+  .voice-to-text__button {
+    width: 100%;
+  }
+}

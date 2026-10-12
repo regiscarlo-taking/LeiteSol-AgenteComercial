@@ -57,6 +57,31 @@ export interface ChatSqlResult {
   rowCount: number;
 }
 
+export type ChartType = "bar" | "line" | "pie";
+
+export interface ChartSeries {
+  name: string;
+  values: Array<number | null>;
+}
+
+export interface ChartSpecification {
+  chartType: ChartType;
+  title: string;
+  categories: string[];
+  series: ChartSeries[];
+  xAxis: { label: string; dataKey?: string | null };
+  yAxis: { label: string; dataKey?: string | null };
+}
+
+export interface CreateChartRequest {
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  categoryColumn: string;
+  valueColumns: string[];
+  chartType?: ChartType | "auto";
+  title?: string | null;
+}
+
 // Envelope do POST /perguntas (contrato de dados, §6). Os nomes seguem o
 // contrato em snake_case porque é o formato que a API devolve.
 export type AgentAnswerStatus =

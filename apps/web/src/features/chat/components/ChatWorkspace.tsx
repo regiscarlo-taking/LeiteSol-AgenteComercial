@@ -1,10 +1,12 @@
 import "../../../app/App.css";
+import { VoiceToText } from "../../../shared/components/VoiceToText";
 
 import { useChatWorkspace } from "../hooks/useChatWorkspace";
 
 export const ChatWorkspace = () => {
   const {
     activeChat,
+    appendTranscript,
     attachments,
     busy,
     chats,
@@ -163,6 +165,12 @@ export const ChatWorkspace = () => {
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Escreva sua pergunta comercial, cole contexto ou simule um briefing de cliente."
               rows={1}
+            />
+
+            <VoiceToText
+              onTranscript={appendTranscript}
+              disabled={busy}
+              className="composer-voice"
             />
 
             <button className="primary-action send-button" type="button" onClick={() => void sendMessage()} disabled={busy}>

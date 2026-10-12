@@ -7,6 +7,8 @@ services:
     environment:
       PORT: 5000
       LEITESOL_API_ENVIRONMENT: development
+      LEITESOL_API_API_KEY: ${LEITESOL_API_API_KEY:-}
+      LEITESOL_API_GATEWAY_LOG_TO_BLOB: ${LEITESOL_API_GATEWAY_LOG_TO_BLOB:-false}
       LEITESOL_API_ALLOWED_HOSTS: api,localhost,127.0.0.1
       LEITESOL_API_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
       LEITESOL_API_FABRIC_POWERBI_URL: ${LEITESOL_API_FABRIC_POWERBI_URL:-}
@@ -39,6 +41,7 @@ services:
     environment:
       PORT: 3001
       BACKEND_URL: http://api:5000
+      BACKEND_API_KEY: ${BACKEND_API_KEY:-}
       CORS_ORIGINS: http://localhost:3000
     volumes:
       - ./apps/gateway:/app/apps/gateway

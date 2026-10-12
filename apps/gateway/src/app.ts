@@ -6,6 +6,7 @@ import type { NextFunction, Request, Response } from "express";
 import { env } from "./config/env.js";
 import { healthcheckMiddleware } from "./middlewares/healthcheck.js";
 import { loggingMiddleware } from "./middlewares/logging.js";
+import { requireSessionCookie } from "./middlewares/session.js";
 import { securityHeadersMiddleware } from "./middlewares/security.js";
 import { chatsRouter } from "./routes/chats.js";
 import { authRouter } from "./routes/auth.js";
@@ -46,13 +47,22 @@ export const createApp = () => {
   );
   app.use(express.json());
 
-  app.use("/api", healthRouter);
   app.use("/api", authRouter);
+  app.use("/api", requireSessionCookie);
+  app.use("/api", healthRouter);
   app.use("/api", chatsRouter);
   app.use("/api", fabricRouter);
 
   app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
     const statusCode = error instanceof BackendRequestError ? error.statusCode : 502;
+    console.error(
+      JSON.stringify({
+        traceId: response.locals.traceId ?? "gateway-error",
+        severity: "error",
+        statusCode,
+        errorType: error.constructor.name,
+      }),
+    );
     response.status(statusCode).json(
       createBaseResponse({
         data: null,

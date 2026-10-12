@@ -1,10 +1,11 @@
-from datetime import timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from leitesol_api.infrastructure.auth import (
+    ACCESS_TOKEN_TTL_SECONDS,
     LoginRequest,
     Token,
     TokenData,
@@ -12,13 +13,29 @@ from leitesol_api.infrastructure.auth import (
     create_access_token,
     create_refresh_token,
     verify_token,
-    oauth2_scheme,
 )
 from leitesol_api.infrastructure.settings import get_settings
 from leitesol_api.interfaces.schemas import RefreshTokenRequest
 
 router = APIRouter(tags=["authentication"])
 limiter = Limiter(key_func=get_remote_address)
+
+
+@router.get("/auth/session")
+def read_session(
+    token_data: Annotated[TokenData, Depends(verify_token)],
+) -> dict[str, object]:
+    if token_data.expires_at is None or token_data.issued_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    expires_at = min(token_data.expires_at, token_data.issued_at + ACCESS_TOKEN_TTL_SECONDS)
+    return {
+        "authenticated": True,
+        "expiresAt": expires_at,
+    }
 
 
 @router.post("/token", response_model=Token)
@@ -53,7 +70,7 @@ async def login(request: Request, credentials: LoginRequest) -> Token:
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.jwt_expiration_hours * 3600,
+        expires_in=ACCESS_TOKEN_TTL_SECONDS,
     )
 
 
@@ -94,7 +111,7 @@ async def refresh_access_token(body: RefreshTokenRequest) -> Token:
             access_token=access_token,
             refresh_token=new_refresh_token,
             token_type="bearer",
-            expires_in=settings.jwt_expiration_hours * 3600,
+            expires_in=ACCESS_TOKEN_TTL_SECONDS,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(

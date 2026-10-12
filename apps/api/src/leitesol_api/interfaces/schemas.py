@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -79,6 +79,30 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class GatewayRequestLogDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: str = Field(min_length=1, max_length=10)
+    path: str = Field(min_length=1, max_length=2048)
+
+
+class GatewayResponseLogDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status_code: int = Field(alias="statusCode", ge=100, le=599)
+    duration_ms: float = Field(alias="durationMs", ge=0)
+
+
+class GatewayLogRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    trace_id: str = Field(alias="traceId", min_length=1, max_length=64)
+    timestamp: datetime
+    severity: Literal["info", "warning", "error"]
+    request: GatewayRequestLogDetails
+    response: GatewayResponseLogDetails
+
+
 class ChatQueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
 
@@ -86,5 +110,26 @@ class ChatQueryRequest(BaseModel):
 class ChatQueryResponse(BaseModel):
     answer: str
     sql_result: SqlResultResponse = Field(alias="sqlResult")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ChartSeriesResponse(BaseModel):
+    name: str
+    values: list[float | None]
+
+
+class ChartAxisResponse(BaseModel):
+    label: str
+    data_key: str | None = Field(default=None, alias="dataKey")
+
+
+class ChartSpecificationResponse(BaseModel):
+    chart_type: str = Field(alias="chartType")
+    title: str
+    categories: list[str]
+    series: list[ChartSeriesResponse]
+    x_axis: ChartAxisResponse = Field(alias="xAxis")
+    y_axis: ChartAxisResponse = Field(alias="yAxis")
 
     model_config = ConfigDict(populate_by_name=True)

@@ -295,6 +295,7 @@ def entra(monkeypatch):
         payload = {
             "aud": "api://leitesol",
             "iss": "https://login.microsoftonline.com/tenant/v2.0",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
             "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
             "preferred_username": "Gestor@LeiteSol.com.br",
             "oid": "oid-1",
@@ -314,6 +315,13 @@ def test_entra_token_yields_email(entra) -> None:
 
 def test_entra_group_grants_full_access(entra) -> None:
     assert auth.verify_token(entra(groups=["grupo-diretoria"])).full_access
+
+
+def test_entra_token_older_than_twenty_minutes_is_rejected(entra) -> None:
+    issued_at = int((datetime.now(timezone.utc) - timedelta(minutes=21)).timestamp())
+
+    with pytest.raises(auth.HTTPException):
+        auth.verify_token(entra(iat=issued_at))
 
 
 @pytest.mark.parametrize(

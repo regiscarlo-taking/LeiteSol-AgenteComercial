@@ -1,5 +1,7 @@
 import type {
   BaseResponse,
+  ChartSpecification,
+  CreateChartRequest,
   HealthStatus,
   Measure,
 } from "@leitesol/contracts";
@@ -11,6 +13,25 @@ export interface BackendTokenResponse {
   refresh_token: string;
   token_type: string;
   expires_in: number;
+}
+
+export interface BackendSessionResponse {
+  authenticated: boolean;
+  expiresAt: number;
+}
+
+export interface GatewayLogRecord {
+  traceId: string;
+  timestamp: string;
+  severity: "info" | "warning" | "error";
+  request: {
+    method: string;
+    path: string;
+  };
+  response: {
+    statusCode: number;
+    durationMs: number;
+  };
 }
 
 export interface LoginCredentials {
@@ -44,6 +65,35 @@ export class BackendRequestError extends Error {
     super(message);
   }
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isBackendEnvelope = (value: unknown): value is BaseResponse<unknown> =>
+  isRecord(value) &&
+  "data" in value &&
+  typeof value.statusCode === "number" &&
+  typeof value.message === "string" &&
+  typeof value.success === "boolean" &&
+  typeof value.traceId === "string" &&
+  typeof value.timestamp === "string";
+
+const readBackendEnvelope = async <T>(
+  response: Response,
+): Promise<BaseResponse<T>> => {
+  const payload: unknown = await response.json().catch(() => null);
+  if (isBackendEnvelope(payload)) {
+    return { ...payload, data: payload.data as T | null };
+  }
+
+  if (response.status === 401) {
+    throw new BackendRequestError("Authentication required.", 401);
+  }
+  throw new BackendRequestError(
+    `Backend returned an invalid response: ${response.status}`,
+    response.status,
+  );
+};
 
 const requestBackend = async (
   url: string,
@@ -94,8 +144,62 @@ export const authenticateBackend = async (
   return (await response.json()) as BackendTokenResponse;
 };
 
+export const validateBackendSession = async (
+  traceId: string,
+  authorization: string,
+): Promise<BackendSessionResponse | null> => {
+  const response = await requestBackend(`${env.backendUrl}/auth/session`, {
+    headers: {
+      "x-api-key": env.backendApiKey,
+      "x-request-id": traceId,
+      ...authorizationHeader(authorization),
+    },
+  });
+
+  if (response.status === 401) {
+    return null;
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | BackendSessionResponse
+    | null;
+  if (!response.ok || !payload?.authenticated || !Number.isFinite(payload.expiresAt)) {
+    throw new BackendRequestError(
+      `Backend session validation failed: ${response.status}`,
+      response.status,
+    );
+  }
+  return payload;
+};
+
+export const persistGatewayLog = async (
+  record: GatewayLogRecord,
+): Promise<void> => {
+  if (!env.backendApiKey) {
+    return;
+  }
+
+  const response = await requestBackend(`${env.backendUrl}/internal/gateway-logs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.backendApiKey,
+      "x-request-id": record.traceId,
+    },
+    body: JSON.stringify(record),
+  });
+
+  if (!response.ok) {
+    throw new BackendRequestError(
+      `Gateway log ingestion failed: ${response.status}`,
+      response.status,
+    );
+  }
+};
+
 export const fetchBackendHealth = async (
   traceId: string,
+  authorization?: string,
 ): Promise<BaseResponse<HealthStatus>> => {
   const response = await requestBackend(
     `${env.backendUrl}/health`,
@@ -103,6 +207,7 @@ export const fetchBackendHealth = async (
       headers: {
         "x-api-key": env.backendApiKey,
         "x-request-id": traceId,
+        ...authorizationHeader(authorization),
       },
     },
   );
@@ -132,19 +237,7 @@ export const fetchBackendMeasures = async (
     },
   );
 
-  const payload =
-    (await response.json().catch(() => null)) as
-      | BaseResponse<Measure[]>
-      | null;
-
-  if (!payload) {
-    throw new BackendRequestError(
-      `Backend unavailable: ${response.status}`,
-      response.status,
-    );
-  }
-
-  return payload;
+  return readBackendEnvelope<Measure[]>(response);
 };
 
 export const fetchBackendEntity = async (
@@ -166,19 +259,7 @@ export const fetchBackendEntity = async (
     },
   );
 
-  const payload =
-    (await response.json().catch(() => null)) as
-      | BaseResponse<SqlResultResponse>
-      | null;
-
-  if (!payload) {
-    throw new BackendRequestError(
-      `Backend unavailable: ${response.status}`,
-      response.status,
-    );
-  }
-
-  return payload;
+  return readBackendEnvelope<SqlResultResponse>(response);
 };
 
 export const fetchBackendChatQuery = async (
@@ -201,17 +282,23 @@ export const fetchBackendChatQuery = async (
     },
   );
 
-  const payload =
-    (await response.json().catch(() => null)) as
-      | BaseResponse<ChatQueryResponse>
-      | null;
+  return readBackendEnvelope<ChatQueryResponse>(response);
+};
 
-  if (!payload) {
-    throw new BackendRequestError(
-      `Backend unavailable: ${response.status}`,
-      response.status,
-    );
-  }
+export const fetchBackendChart = async (
+  traceId: string,
+  chart: CreateChartRequest,
+  authorization?: string,
+): Promise<BaseResponse<ChartSpecification>> => {
+  const response = await requestBackend(`${env.backendUrl}/chat/chart`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-request-id": traceId,
+      ...authorizationHeader(authorization),
+    },
+    body: JSON.stringify(chart),
+  });
 
-  return payload;
+  return readBackendEnvelope<ChartSpecification>(response);
 };

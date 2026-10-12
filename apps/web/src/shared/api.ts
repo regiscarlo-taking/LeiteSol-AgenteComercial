@@ -1,6 +1,8 @@
 import type {
   BaseResponse,
+  ChartSpecification,
   ChatSqlResult,
+  CreateChartRequest,
   HealthStatus,
   Measure,
 } from "@leitesol/contracts";
@@ -17,6 +19,7 @@ import { requestApi } from "./http";
 
 export interface AuthSession {
   authenticated: boolean;
+  expiresAt: number;
 }
 
 export type SqlResult = ChatSqlResult;
@@ -83,6 +86,16 @@ export const queryChat = async (
       question,
     },
     errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
+  });
+
+export const createChart = async (
+  chart: CreateChartRequest,
+): Promise<BaseResponse<ChartSpecification>> =>
+  requestApi<ChartSpecification, CreateChartRequest>({
+    url: "/api/chat/chart",
+    method: "POST",
+    data: chart,
+    errorMessage: "Não foi possível criar o gráfico.",
   });
 
 export const getGatewayHealth = async (): Promise<

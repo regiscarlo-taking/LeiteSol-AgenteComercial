@@ -21,14 +21,17 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const [authenticated, setAuthenticated] = useState<boolean | undefined>(
     undefined,
   );
+  const [expiresAt, setExpiresAt] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     const checkSession = async () => {
       try {
         const session = await getAuthSession();
         setAuthenticated(session.authenticated);
+        setExpiresAt(session.expiresAt);
       } catch {
         setAuthenticated(false);
+        setExpiresAt(undefined);
       }
     };
 
@@ -36,6 +39,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
 
     const showLogin = () => {
       setAuthenticated(false);
+      setExpiresAt(undefined);
     };
 
     window.addEventListener(authExpiredEvent, showLogin);
@@ -44,6 +48,26 @@ export const AuthGate = ({ children }: AuthGateProps) => {
       window.removeEventListener(authExpiredEvent, showLogin);
     };
   }, []);
+
+  useEffect(() => {
+    if (!authenticated || expiresAt === undefined) {
+      return;
+    }
+
+    const remainingMs = expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      setAuthenticated(false);
+      setExpiresAt(undefined);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAuthenticated(false);
+      setExpiresAt(undefined);
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [authenticated, expiresAt]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,6 +79,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
       const session = await authenticate(username, password);
 
       setAuthenticated(session.authenticated);
+      setExpiresAt(session.expiresAt);
       setPassword("");
     } catch (requestError) {
       setError((requestError as Error).message);

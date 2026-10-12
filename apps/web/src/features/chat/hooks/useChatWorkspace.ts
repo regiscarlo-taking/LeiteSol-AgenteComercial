@@ -122,6 +122,18 @@ export const useChatWorkspace = () => {
     );
   };
 
+  const appendTranscript = (transcript: string) => {
+    const cleaned = transcript.trim();
+    if (!cleaned) {
+      return;
+    }
+    setDraft((current) =>
+      current
+        ? `${current}${/\s$/.test(current) ? "" : " "}${cleaned}`
+        : cleaned,
+    );
+  };
+
   const sendMessage = async () => {
     const parsed = chatFormSchema.safeParse({
       userId: "authenticated-user",
@@ -205,6 +217,7 @@ export const useChatWorkspace = () => {
 
   return {
     activeChat,
+    appendTranscript,
     attachments,
     busy,
     chats,

@@ -5,6 +5,8 @@ import { notifySessionExpired } from "./auth-session";
 type RequestMetadata = Record<string, unknown>;
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+class ApiResponseError extends Error {}
+
 interface CreateBaseRequestParams<TData, TMetadata> {
   data?: TData | null;
   metadata?: TMetadata | null;
@@ -71,6 +73,9 @@ const executeWithRetry = async <T>(
     try {
       return await operation();
     } catch (error) {
+      if (error instanceof ApiResponseError) {
+        throw error;
+      }
       if (attempt >= retries) {
         throw error;
       }
@@ -142,7 +147,7 @@ export const requestApi = async <
     }
 
     if (!response.ok || !payload.success) {
-      throw new Error(
+      throw new ApiResponseError(
         payload.error ??
           payload.message ??
           errorMessage,

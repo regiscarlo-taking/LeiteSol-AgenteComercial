@@ -3,19 +3,18 @@ import { Router } from "express";
 import {
   authenticateBackend,
   BackendRequestError,
+  validateBackendSession,
 } from "../services/backend-client.js";
+import {
+  accessTokenCookie,
+  clearAuthCookies,
+  cookieOptions,
+  getAccessToken,
+} from "../middlewares/session.js";
 
 export const authRouter = Router();
 
-const accessTokenCookie = "access_token";
-const refreshTokenCookie = "refresh_token";
-
-const cookieOptions = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-};
+const maxSessionAgeMs = 20 * 60 * 1000;
 
 authRouter.post("/auth/login", async (request, response, next) => {
   try {
@@ -42,23 +41,19 @@ authRouter.post("/auth/login", async (request, response, next) => {
       response.locals.traceId,
     );
 
+    clearAuthCookies(response);
     response.cookie(
       accessTokenCookie,
       token.access_token,
       {
         ...cookieOptions,
-        maxAge: token.expires_in * 1000,
+        maxAge: Math.min(token.expires_in * 1000, maxSessionAgeMs),
       },
-    );
-
-    response.cookie(
-      refreshTokenCookie,
-      token.refresh_token,
-      cookieOptions,
     );
 
     response.status(200).json({
       authenticated: true,
+      expiresAt: Date.now() + Math.min(token.expires_in * 1000, maxSessionAgeMs),
     });
   } catch (error) {
     if (error instanceof BackendRequestError) {
@@ -74,15 +69,8 @@ authRouter.post("/auth/login", async (request, response, next) => {
   }
 });
 
-authRouter.get("/auth/session", (request, response) => {
-  const accessToken = request.headers.cookie
-    ?.split(";")
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${accessTokenCookie}=`))
-    ?.split("=")
-    .slice(1)
-    .join("=");
-
+authRouter.get("/auth/session", async (request, response, next) => {
+  const accessToken = getAccessToken(request);
   if (!accessToken) {
     response.status(401).json({
       authenticated: false,
@@ -90,14 +78,29 @@ authRouter.get("/auth/session", (request, response) => {
     return;
   }
 
-  response.status(200).json({
-    authenticated: true,
-  });
+  try {
+    const session = await validateBackendSession(
+      response.locals.traceId,
+      `Bearer ${accessToken}`,
+    );
+    if (!session) {
+      clearAuthCookies(response);
+      response.status(401).json({ authenticated: false });
+      return;
+    }
+
+    const expiresAt = Math.min(
+      session.expiresAt * 1000,
+      Date.now() + maxSessionAgeMs,
+    );
+    response.status(200).json({ authenticated: true, expiresAt });
+  } catch (error) {
+    next(error);
+  }
 });
 
 authRouter.post("/auth/logout", (_request, response) => {
-  response.clearCookie(accessTokenCookie, cookieOptions);
-  response.clearCookie(refreshTokenCookie, cookieOptions);
+  clearAuthCookies(response);
 
   response.status(200).json({
     authenticated: false,

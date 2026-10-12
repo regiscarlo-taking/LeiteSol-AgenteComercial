@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, BinaryIO
 
 from azure.core.credentials import TokenCredential
+from azure.core.exceptions import ResourceExistsError
 from azure.identity import ChainedTokenCredential, ClientSecretCredential, DefaultAzureCredential
 
 if TYPE_CHECKING:
@@ -75,7 +76,10 @@ class BlobStorageGateway:
         """Acrescenta uma linha a um append blob, criando-o na primeira vez."""
         client = self._container.get_blob_client(self._blob_name(name))
         if not client.exists():
-            client.create_append_blob()
+            try:
+                client.create_append_blob()
+            except ResourceExistsError:
+                pass
         client.append_block((line.rstrip("\n") + "\n").encode("utf-8"))
 
     def download(self, name: str) -> bytes:

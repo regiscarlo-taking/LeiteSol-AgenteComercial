@@ -51,10 +51,15 @@ const parseArgs = (argv) => {
 
 const options = parseArgs(process.argv.slice(2));
 
-const withPythonPath = () => ({
+const withPythonPath = ({ includeApiPackages = false } = {}) => ({
   ...process.env,
   PORT: process.env.PORT ?? options.port,
-  PYTHONPATH: [apiSrcPath, agentSrcPath, apiPackagesPath, process.env.PYTHONPATH]
+  PYTHONPATH: [
+    apiSrcPath,
+    agentSrcPath,
+    ...(includeApiPackages ? [apiPackagesPath] : []),
+    process.env.PYTHONPATH,
+  ]
     .filter(Boolean)
     .join(path.delimiter),
 });
@@ -100,14 +105,14 @@ if (hasCommand("uv")) {
   child.on("exit", (code) => process.exit(code ?? 0));
   process.on("SIGINT", () => child.kill("SIGINT"));
   process.on("SIGTERM", () => child.kill("SIGTERM"));
-} else if (existsSync(localVenvPython) && existsSync(apiPackagesPath)) {
+} else if (existsSync(localVenvPython)) {
   const child = run(localVenvPython, uvicornArgs, withPythonPath());
 
   child.on("exit", (code) => process.exit(code ?? 0));
   process.on("SIGINT", () => child.kill("SIGINT"));
   process.on("SIGTERM", () => child.kill("SIGTERM"));
 } else if (hasCommand("py", ["-3.12", "--version"]) && existsSync(apiPackagesPath)) {
-  const child = run("py", ["-3.12", ...uvicornArgs], withPythonPath());
+  const child = run("py", ["-3.12", ...uvicornArgs], withPythonPath({ includeApiPackages: true }));
 
   child.on("exit", (code) => process.exit(code ?? 0));
   process.on("SIGINT", () => child.kill("SIGINT"));

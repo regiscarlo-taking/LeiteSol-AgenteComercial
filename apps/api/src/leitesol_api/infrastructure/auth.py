@@ -10,8 +10,9 @@ from pydantic import BaseModel
 
 from leitesol_api.infrastructure.settings import get_settings
 
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+ACCESS_TOKEN_TTL_SECONDS = 20 * 60
+ACCESS_TOKEN_TTL = timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS)
 
 
 class LoginRequest(BaseModel):
@@ -37,6 +38,8 @@ class TokenData(BaseModel):
     # Entra ID com visão completa (diretoria / Adm. Vendas).
     email: Optional[str] = None
     full_access: bool = False
+    issued_at: int | None = None
+    expires_at: int | None = None
 
 
 def create_access_token(
@@ -45,18 +48,14 @@ def create_access_token(
 ) -> str:
     settings = get_settings()
 
-    expire = (
-        datetime.now(timezone.utc) + expires_delta
-        if expires_delta
-        else datetime.now(timezone.utc)
-        + timedelta(hours=settings.jwt_expiration_hours)
-    )
+    issued_at = datetime.now(timezone.utc)
+    expire = issued_at + (expires_delta or ACCESS_TOKEN_TTL)
 
     payload = {
         "sub": username,
         "type": "access",
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": issued_at,
     }
 
     return jwt.encode(
@@ -126,11 +125,22 @@ def verify_entra_token(token: str) -> TokenData:
     if not isinstance(email, str) or not email.strip():
         raise credentials_exception
 
+    issued_at = payload.get("iat")
+    expires_at = payload.get("exp")
+    if (
+        not isinstance(issued_at, int)
+        or not isinstance(expires_at, int)
+        or datetime.now(timezone.utc).timestamp() >= issued_at + ACCESS_TOKEN_TTL_SECONDS
+    ):
+        raise credentials_exception
+
     groups = payload.get("groups") or []
     return TokenData(
         username=str(payload.get("oid") or email),
         email=email.strip().lower(),
         full_access=bool(settings.full_access_groups & {str(group) for group in groups}),
+        issued_at=issued_at,
+        expires_at=expires_at,
     )
 
 
@@ -157,8 +167,16 @@ def verify_token(
 
         username = payload.get("sub")
         token_type = payload.get("type")
+        issued_at = payload.get("iat")
+        expires_at = payload.get("exp")
 
-        if not isinstance(username, str):
+        if (
+            not isinstance(username, str)
+            or not isinstance(issued_at, int)
+            or not isinstance(expires_at, int)
+            or datetime.now(timezone.utc).timestamp()
+            >= min(expires_at, issued_at + ACCESS_TOKEN_TTL_SECONDS)
+        ):
             raise credentials_exception
 
         if token_type != "access":
@@ -175,6 +193,8 @@ def verify_token(
             token_type="access",
             email=settings.local_user_email.strip().lower() or None,
             full_access=settings.local_user_full_access,
+            issued_at=issued_at,
+            expires_at=expires_at,
         )
 
     except jwt.ExpiredSignatureError:

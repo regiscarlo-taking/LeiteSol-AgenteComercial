@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Registro de consumo da LLM por pergunta (tokens, sem conteúdo). Vai sempre
     # para o log da aplicação; para o Blob, só com o container privado.
     usage_log_to_blob: bool = False
+    gateway_log_to_blob: bool = False
     # Preço por milhão de tokens do modelo configurado; 0 = custo não estimado.
     gemini_input_price_per_mtok: float = 0.0
     gemini_output_price_per_mtok: float = 0.0
@@ -48,7 +49,6 @@ class Settings(BaseSettings):
     catalog_cache_seconds: int = 600
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expiration_hours: int = 24
     jwt_refresh_expiration_hours: int = 168  # 7 dias
 
     def __init__(self, **data):

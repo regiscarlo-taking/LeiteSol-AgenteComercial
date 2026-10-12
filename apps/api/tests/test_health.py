@@ -1,6 +1,7 @@
 import asyncio
 
 import httpx
+from leitesol_api.infrastructure.auth import TokenData, verify_token
 from leitesol_api.main import app
 
 
@@ -11,7 +12,11 @@ async def get_response(path: str) -> httpx.Response:
 
 
 def test_read_health() -> None:
-    response = asyncio.run(get_response("/health"))
+    app.dependency_overrides[verify_token] = lambda: TokenData(username="test")
+    try:
+        response = asyncio.run(get_response("/health"))
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     payload = response.json()
@@ -23,6 +28,12 @@ def test_read_health() -> None:
         "status": "healthy",
         "version": "v1",
     }
+
+
+def test_read_health_requires_authentication() -> None:
+    response = asyncio.run(get_response("/health"))
+
+    assert response.status_code == 401
 
 
 def test_liveness_health_middleware() -> None:

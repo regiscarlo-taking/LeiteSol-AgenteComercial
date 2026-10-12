@@ -45,11 +45,18 @@ Para subir a API separadamente em desenvolvimento:
 npm run dev:api
 ```
 
-Ou, se preferir chamar diretamente o Uvicorn:
+O agente (`apps/agent`) é uma dependência Python local da API. Para subir o
+Uvicorn pelo workspace e instalar/resolver essa dependência corretamente:
 
 ```bash
-uvicorn leitesol_api.main:app --reload --host 0.0.0.0 --port 5000
+uv run --package leitesol-api python -m uvicorn leitesol_api.main:app --reload --host 0.0.0.0 --port 5000
 ```
+
+Evite executar `uvicorn leitesol_api.main:app` diretamente com um Python global:
+nesse caso o interpretador pode encontrar `apps/api/src`, mas não
+`apps/agent/src`, causando `ModuleNotFoundError: leitesol_agent`. O comando
+`npm run dev:api` também prepara esses caminhos automaticamente quando usa o
+ambiente virtual local da API.
 
 Se quiser subir tudo junto:
 
@@ -78,6 +85,122 @@ pnpm dev:agent
 - Gateway:
   - `GET /api/health` consulta a API
   - `GET /health/live` responde liveness do gateway
+
+## Logs do gateway e duração da sessão
+
+Cada requisição recebida pelo gateway ganha um `X-Request-ID` novo. O gateway
+propaga o identificador para a API e o devolve no cabeçalho da resposta. Um
+registro JSON correlaciona método/rota da requisição com status/duração da
+resposta. Senhas, cookies, tokens, query strings e corpos não são registrados,
+pois podem conter dados comerciais. Respostas 4xx são warnings; respostas 5xx
+são errors.
+
+Para persistir esses registros no Blob privado existente, configure o mesmo
+valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
+usado pelo Docker Compose (ou forneça as duas variáveis ao iniciar os serviços
+diretamente), configure conta/container de Storage e defina
+`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. A API grava arquivos JSONL diários em
+`gateway/YYYY-MM-DD/info.jsonl`, `warning.jsonl` e `error.jsonl`. Sem a gravação
+no Blob, os logs estruturados continuam no stdout do gateway e da API. Falhas
+de persistência são registradas como warning e não interrompem as requisições.
+
+Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
+máxima do token nas rotas protegidas; o gateway mantém o access token em cookie
+HttpOnly, valida a sessão ao carregar a página e volta à tela de login quando
+o token expira ou uma chamada protegida retorna 401. A interface não renova a
+sessão silenciosamente.
+
+Para uma futura camada relacional de rastreabilidade, sugiro este conjunto
+mínimo:
+
+| Tabela | Finalidade / colunas principais |
+| --- | --- |
+| `RequestTrace` | Uma linha por chamada browser-gateway: `trace_id` (PK), `started_at`, `finished_at`, `method`, `path`, `status_code`, `duration_ms`, `severity`. |
+| `ServiceCall` | Uma linha por chamada downstream: `call_id` (PK), `trace_id` (FK), `service`, `operation`, `started_at`, `finished_at`, `status_code`, `duration_ms`. |
+| `TraceError` | Erros/warnings do trace ou chamada: `error_id` (PK), `trace_id` (FK), `call_id` (FK opcional), `occurred_at`, `severity`, `code`, `message` sanitizada. |
+| `UserSession` | Ciclo de autenticação sem armazenar tokens: `session_id` (PK), `user_id` ou identificador pseudônimo, `created_at`, `expires_at`, `ended_at`, `end_reason`. |
+
+Não armazene nessas tabelas corpos de request/response, bearer tokens, cookies ou
+senhas. Use `trace_id` como chave comum do gateway até a API; `call_id` distingue
+retries ou múltiplas chamadas downstream.
+
+## Ditar perguntas por voz
+
+O chat inclui o componente reutilizável `VoiceToText`, localizado em
+`apps/web/src/shared/components/VoiceToText.tsx`. Ele não conhece o chat nem
+controla o envio: recebe `onTranscript`, idioma, estado desabilitado e classe
+opcional; o consumidor decide o que fazer com a transcrição. No chat, a fala é
+acrescentada ao rascunho e precisa ser revisada e enviada pelo usuário.
+
+O reconhecimento usa a Web Speech API do navegador; disponibilidade e suporte
+variam por navegador. Requer HTTPS (ou localhost) e permissão do microfone. O
+recurso não envia a pergunta automaticamente à API.
+
+Exemplo de reutilização:
+
+```tsx
+<VoiceToText
+  language="pt-BR"
+  onTranscript={(text) => setValue((current) => `${current} ${text}`.trim())}
+/>
+```
+
+## Criar especificações JSON de gráficos
+
+`POST /chat/chart` (ou `/api/chat/chart` pelo gateway) transforma o resultado
+tabular de uma consulta do agente em uma especificação JSON pronta para uma
+biblioteca de gráficos no frontend. Use o `columns` e `rows` devolvidos por
+`POST /chat/query` ou pelo fluxo de perguntas do agente e escolha a coluna de
+categoria e uma ou mais colunas numéricas. A rota exige autenticação; não
+executa SQL nem consulta o Fabric por conta própria — a fonte dos dados é a
+consulta autenticada do agente, que já aplica a alçada do usuário e as regras
+do catálogo/views.
+
+Tipos disponíveis: `auto`, `bar`, `line` e `pie`. `auto` escolhe linha para
+categorias de período/mês e barras para categorias como cliente ou UF. Pizza
+aceita uma única série numérica. Filtros inválidos/valores não numéricos são
+retornados como erro de validação; valores nulos são mantidos como lacunas.
+
+Exemplo completo:
+
+```bash
+# 1. Obtenha uma sessão/token seguindo o fluxo de autenticação existente.
+# 2. Pergunte ao agente e use sqlResult.columns e sqlResult.rows da resposta.
+curl -X POST http://localhost:5000/chat/chart \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "columns": ["Competência", "FAT R$ atual", "FAT R$ ano anterior"],
+    "rows": [
+      {"Competência": "2026-01", "FAT R$ atual": 125000, "FAT R$ ano anterior": 108000},
+      {"Competência": "2026-02", "FAT R$ atual": 131000, "FAT R$ ano anterior": 119000}
+    ],
+    "categoryColumn": "Competência",
+    "valueColumns": ["FAT R$ atual", "FAT R$ ano anterior"],
+    "chartType": "auto",
+    "title": "Faturamento mensal: atual x ano anterior"
+  }'
+```
+
+A resposta usa o envelope padrão da API (`data`, `statusCode`, `success`,
+`traceId`) e contém `chartType`, `categories`, `series` e metadados dos eixos.
+A mesma especificação pode ser passada a Recharts, Chart.js, ECharts ou outro
+renderizador escolhido pela interface.
+
+Análises comerciais que podem alimentar esse fluxo, respeitando as operações
+já implementadas no agente:
+
+- **Evolução mensal:** “Mostre a evolução do faturamento dos últimos 12 meses.” Use
+  `Competência` no eixo X e FAT R$ ou FAT KG como série; `auto` escolhe linha.
+- **Comparação anual:** “Compare o faturamento de janeiro a junho de 2026 com o
+  mesmo período de 2025, por UF.” Use UF como categoria e as colunas de FAT R$
+  atual/anterior como séries; barras ajudam a comparar os períodos.
+- **Ranking de clientes:** “Quais foram os 20 clientes com maior volume de vendas
+  no primeiro semestre de 2026?” Use Cliente como categoria e FAT KG como série;
+  barras destacam a ordem do ranking.
+- **Vendedores abaixo da média:** “Quais vendedores ficaram abaixo da própria
+  média de faturamento dos três meses anteriores em agosto de 2026?” Use Vendedor
+  como categoria e FAT R$ no mês/média como séries.
 
 ## Segurança inicial
 

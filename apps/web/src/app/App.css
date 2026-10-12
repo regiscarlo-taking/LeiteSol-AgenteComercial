@@ -432,7 +432,7 @@ button {
 
 .composer-box {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: end;
   gap: 0.8rem;
   padding: 0.9rem;
@@ -528,6 +528,7 @@ button {
   }
 
   .tool-button,
+  .composer-voice,
   .send-button {
     width: 100%;
   }

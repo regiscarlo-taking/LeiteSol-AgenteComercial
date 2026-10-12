@@ -12,6 +12,7 @@ e entrega a ele a conexão com o Warehouse, a alçada do usuário e a chave do G
 | `application/answer_question.py` | O fluxo de uma pergunta: alçada, intenção, parâmetros, execução, ressalvas e redação |
 | `application/parameters.py` | Validação do que a LLM extraiu contra o catálogo |
 | `application/where_filters.py` | Filtros `WHERE` estruturados, allowlist de campos/operações e validação |
+| `application/charts.py` | Conversão de resultados tabulares em especificações de gráfico JSON |
 | `application/operations/` | Uma classe por operação do catálogo, com o SQL fixo e a regra de negócio |
 | `infrastructure/catalog.py` | Leitura do catálogo `IA_COMERCIAL.AGT_*`, com cache |
 | `infrastructure/gemini.py` | Provedor Gemini: classificar, extrair parâmetros, redigir |

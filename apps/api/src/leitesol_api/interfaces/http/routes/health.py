@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from leitesol_api.application.get_system_status import GetSystemStatus
+from leitesol_api.infrastructure.auth import verify_token
 from leitesol_api.interfaces.responses import build_response_payload
 from leitesol_api.interfaces.schemas import BaseResponse, HealthStatusResponse
 
-router = APIRouter(tags=["health"])
+router = APIRouter(tags=["health"], dependencies=[Depends(verify_token)])
 
 
 @router.get("/health", response_model=BaseResponse[HealthStatusResponse, dict])

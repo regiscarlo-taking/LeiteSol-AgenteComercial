@@ -6,7 +6,10 @@ export const healthRouter = Router();
 
 healthRouter.get("/health", async (_request, response, next) => {
   try {
-    const status = await fetchBackendHealth(response.locals.traceId);
+    const status = await fetchBackendHealth(
+      response.locals.traceId,
+      _request.header("authorization"),
+    );
     response.status(status.statusCode).json(status);
   } catch (error) {
     next(error);
