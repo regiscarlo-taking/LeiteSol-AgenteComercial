@@ -149,6 +149,19 @@ def test_ranking_without_positive_total_has_no_share() -> None:
     assert "PARTICIPACAO" in codes(result)
 
 
+def test_ranking_defaults_to_rede_and_store_only_when_asked() -> None:
+    # O Power BI ranqueia o cliente agrupado (comparação de 13-10, AIC-289).
+    period = {"periodo_inicio": date(2026, 8, 1), "periodo_fim": date(2026, 8, 31)}
+    default = CheckingFetcher([LAST_CLOSED, NOT_OPEN, []])
+    RankClients().run(default, period, FULL)
+    store = CheckingFetcher([LAST_CLOSED, NOT_OPEN, []])
+    RankClients().run(store, {**period, "granularidade_cliente": "cliente_loja"}, FULL)
+
+    assert "GROUP BY c.Rede" in default.calls[-1][0]
+    assert "MAX(c.RedeNome)" in default.calls[-1][0]
+    assert "GROUP BY c.ClienteId" in store.calls[-1][0]
+
+
 # ------------------------------------------------------------------ série 12 meses
 
 def test_months_back_crosses_the_year() -> None:
