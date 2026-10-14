@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # para o log da aplicação; para o Blob, só com o container privado.
     usage_log_to_blob: bool = False
     gateway_log_to_blob: bool = False
+    # Histórico de conversas no schema IA_APP do Warehouse (17_historico_conversa.sql).
+    # Desligado até as tabelas existirem e a retenção estar definida.
+    conversation_history_enabled: bool = False
     # Preço por milhão de tokens do modelo configurado; 0 = custo não estimado.
     gemini_input_price_per_mtok: float = 0.0
     gemini_output_price_per_mtok: float = 0.0

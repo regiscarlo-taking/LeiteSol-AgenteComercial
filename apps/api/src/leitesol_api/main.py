@@ -17,6 +17,7 @@ from leitesol_api.interfaces.http.routes.auth import limiter
 from leitesol_api.interfaces.http.routes.auth import router as auth_router
 from leitesol_api.interfaces.http.routes.charts import router as charts_router
 from leitesol_api.interfaces.http.routes.chat import router as chat_router
+from leitesol_api.interfaces.http.routes.chats import router as chats_router
 from leitesol_api.interfaces.http.routes.gateway_logs import router as gateway_logs_router
 from leitesol_api.interfaces.http.routes.health import router as health_router
 from leitesol_api.interfaces.http.routes.measures import router as measures_router
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(gateway_logs_router)
     app.include_router(chat_router)
+    app.include_router(chats_router)
     app.include_router(charts_router)
     app.include_router(health_router)
     app.include_router(measures_router)

@@ -127,6 +127,38 @@ Não armazene nessas tabelas corpos de request/response, bearer tokens, cookies 
 senhas. Use `trace_id` como chave comum do gateway até a API; `call_id` distingue
 retries ou múltiplas chamadas downstream.
 
+## Histórico de conversas
+
+Implementado a partir do modelo sugerido abaixo, no schema **`IA_APP`** do
+Warehouse `AgenteFaturamentoDW`, separado do `IA_COMERCIAL` do agente. O script
+das tabelas e da permissão é o `17_historico_conversa.sql` do repositório de
+documentação (`docs/projeto/modelo-semantico-fabric/sql/`).
+
+- `IA_APP.CONVERSA` (Conversation) e `IA_APP.CONVERSA_MENSAGEM`
+  (ConversationMessage). A `AgentExecution` virou colunas da mensagem do
+  assistente (`OperacaoId`, `StatusResposta`, `CorrelationId`). A
+  `MessageAttachment` não foi criada porque o MVP não recebe anexo.
+- **Só inserção.** O Warehouse derruba `UPDATE`/`DELETE` concorrentes na mesma
+  tabela. Por isso a data de atualização é a da última mensagem e não há
+  exclusão lógica. A identidade do backend recebe só `SELECT` + `INSERT` em
+  `IA_APP` e continua somente leitura em `IA_COMERCIAL`.
+- Guarda o texto da pergunta e o da resposta, **não a tabela de resultado**.
+  Ao reabrir uma conversa, a resposta volta só como texto.
+- `POST /chat/query` aceita `chatId` (a tela manda o id da conversa ativa) e
+  devolve `chatId`. Sem `chatId`, o backend gera um. A gravação roda depois da
+  resposta, e uma falha ao gravar vira só um aviso no log.
+- `GET /chats` lista as conversas do usuário logado (até 50, mais recentes
+  primeiro) e `GET /chats/{chatId}` abre uma delas. Toda leitura filtra pelo
+  dono: o e-mail do token do Entra ID, ou o nome do usuário no login local.
+  Uma conversa de outro usuário responde 404. O gateway expõe as duas rotas em
+  `/api/chats`.
+- Fica desligado por padrão (`LEITESOL_API_CONVERSATION_HISTORY_ENABLED=false`).
+  Só ligue depois de rodar o script e definir a política de retenção, porque a
+  resposta pode conter valor comercial.
+
+Falta na tela: listar as conversas (`listChats`) e reabrir uma delas
+(`getChat`). Os dois já existem em `apps/web/src/shared/api.ts`.
+
 Para persistir o conteúdo das conversas (separado dos logs técnicos), sugiro
 este modelo relacional:
 
