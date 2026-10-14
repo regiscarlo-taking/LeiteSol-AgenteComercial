@@ -120,6 +120,13 @@ def padded(value: str, width: int) -> list[str]:
     return [value]
 
 
+def client_id_candidates(value: str) -> list[str]:
+    """Cliente + loja tem 8 posições; com 7, faltou o zero da frente."""
+    if len(value) == CLIENT_ID_WIDTH - 1:
+        return padded(value, CLIENT_ID_WIDTH)
+    return [value]
+
+
 def _in(column: str, values: list[str]) -> str:
     return f"{column} IN ({', '.join('?' for _ in values)})"
 
@@ -133,7 +140,7 @@ def client_filter(text: str) -> tuple[str, list[Any]]:
     if len(digits) == 8 and value == digits:
         # Oito dígitos é raiz de CNPJ OU código de cliente + loja (01735101).
         return "(c.CNPJRaiz = ? OR c.ClienteId = ?)", [digits, digits]
-    client_ids = padded(value, CLIENT_ID_WIDTH) if len(value) == CLIENT_ID_WIDTH - 1 else [value]
+    client_ids = client_id_candidates(value)
     client_codes = padded(value, CLIENT_CODE_WIDTH)
     groups = padded(value, GROUP_CODE_WIDTH)
     clause = (
@@ -221,7 +228,7 @@ def universe_where(
         where.add(clause, *params)
     if values.get("cliente_loja"):
         value = values["cliente_loja"].strip()
-        client_ids = padded(value, CLIENT_ID_WIDTH) if len(value) == CLIENT_ID_WIDTH - 1 else [value]
+        client_ids = client_id_candidates(value)
         client_codes = padded(value, CLIENT_CODE_WIDTH)
         where.add(
             f"({_in('c.ClienteId', client_ids)} OR {_in('c.ClienteCodigo', client_codes)})",
