@@ -164,7 +164,7 @@ def test_ranking_defaults_to_rede_and_store_only_when_asked() -> None:
     assert "GROUP BY c.ClienteId" in store.calls[-1][0]
 
 
-def test_representative_ranking_uses_transaction_seller_and_scope() -> None:
+def test_representative_ranking_credits_current_seller_by_default() -> None:
     rows = [
         {"posicao": 1, "vendedor_id": "17", "vendedor": "Ana", "papel": "RCA",
          "fat_rs": 1000, "fat_kg": 500},
@@ -179,12 +179,27 @@ def test_representative_ranking_uses_transaction_seller_and_scope() -> None:
     )
 
     sql, params = fetcher.calls[1]
+    assert "c.RCAAtual AS vendedor_id" in sql
+    assert "GROUP BY c.RCAAtual" in sql
+    assert "f.VendedorId" not in sql
+    assert "c.RCAAtual IN (?)" in sql
+    assert "r.PapelComercial IN (?)" in sql
+    assert params[:2] == (date(2026, 6, 1), date(2026, 9, 1))
+    assert result.main_block["linhas"][0]["vendedor"] == "Ana"
+
+
+def test_representative_ranking_uses_transaction_seller_only_when_asked() -> None:
+    fetcher = CheckingFetcher([LAST_CLOSED, [], NOT_OPEN])
+    RankRepresentatives().run(
+        fetcher,
+        {"metrica_desempenho": "fat_rs", "tipo_atribuicao": "vendedor_da_venda"},
+        CARTEIRA,
+    )
+
+    sql, _ = fetcher.calls[1]
     assert "f.VendedorId AS vendedor_id" in sql
     assert "v.RepresentanteId = f.VendedorId" in sql
     assert "c.RCAAtual IN (?)" in sql
-    assert "v.PapelComercial IN (?)" in sql
-    assert params[:2] == (date(2026, 6, 1), date(2026, 9, 1))
-    assert result.main_block["linhas"][0]["vendedor"] == "Ana"
 
 
 def test_representative_ranking_refuses_unapproved_composite_metric() -> None:
