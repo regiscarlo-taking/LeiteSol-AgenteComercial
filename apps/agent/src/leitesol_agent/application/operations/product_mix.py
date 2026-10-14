@@ -127,6 +127,14 @@ def build_query(
     return sql, [start, end_exclusive, *where.params]
 
 
+def strip_text(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tira os espaços que a origem deixa no fim de descrição e família (ex.: SKU 655)."""
+    return [
+        {key: value.strip() if isinstance(value, str) else value for key, value in row.items()}
+        for row in rows
+    ]
+
+
 def _last(value: Any) -> tuple[bool, Any]:
     """Chave de ordenação crescente com vazio por último."""
     return (value is None, value if value is not None else 0)
@@ -247,7 +255,9 @@ class ProductMix:
         partial = has_open_month(fetcher, start, end_exclusive)
 
         sql, params = build_query(values, start, end_exclusive, scope, product)
-        rows = sort_rows(fetcher.fetch(sql, tuple(params)), values.get("ordenacao"), metric)
+        rows = sort_rows(
+            strip_text(fetcher.fetch(sql, tuple(params))), values.get("ordenacao"), metric
+        )
         if rows is None:
             return OperationResult.clarification(ORDER_QUESTION.format(text=values["ordenacao"]))
         main_block, non_positive_total = shape_rows(rows, level, months)
