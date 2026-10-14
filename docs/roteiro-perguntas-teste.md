@@ -40,7 +40,7 @@ Antes de rodar, tenha em mente:
 
 | # | Pergunta | Status | Conferir |
 | --- | --- | --- | --- |
-| 2.1 | Quais foram os 20 clientes com maior volume no 1º semestre de 2026? | respondida | Exatamente 20 posições, por **FAT KG** (com toneladas). Padrão = **rede** (PR #10). |
+| 2.1 | Quais foram os 20 clientes com maior volume no 1º semestre de 2026? | respondida | Exatamente 20 posições, por **FAT KG** (com toneladas). Padrão = **rede** depois do merge do PR #10; antes dele, cliente + loja. |
 | 2.2 | Top 10 clientes em faturamento em julho de 2026. | respondida | 10 posições, por **FAT R$**. |
 | 2.3 | Ranking de clientes de julho de 2026 por loja. | respondida | Participante = cliente + loja (não a rede). |
 | 2.4 | Top 20 clientes de leite em pó em 2026. | respondida | Filtro de produto **antes** do ranking: muda quem entra, não só o valor. |
@@ -58,7 +58,7 @@ corte caiu num empate, a resposta deve dizer.
 | 3.2 | Evolução do faturamento dos últimos 3 meses. | respondida | **3 linhas, uma por mês**, e não um total consolidado (ver nota abaixo). |
 | 3.3 | Evolução do volume de leite em pó nos últimos 6 meses. | respondida | Filtro em toda a janela; FAT KG. |
 | 3.4 | Evolução do faturamento incluindo o mês atual. | respondida | Mês aberto entra **com aviso** de valor parcial (TR02). |
-| 3.5 | Evolução do faturamento dos últimos 24 meses. | respondida ou esclarecimento | O teto é 12 meses; a resposta não pode trazer 24. |
+| 3.5 | Evolução do faturamento dos últimos 24 meses. | esclarecimento | Janelas aceitas: 3, 6, 9 ou 12 meses; o agente pergunta qual. |
 
 > **Nota (3.2).** O Regis observou na interna de 14-10 que "últimos 3 meses" volta
 > mês a mês, não somado. É o comportamento da OP17, que é uma série. Para
@@ -73,8 +73,8 @@ corte caiu num empate, a resposta deve dizer.
 | 4.1 | Qual o mix de produtos do cliente 17351? | respondida | Últimos 3 meses fechados; família na ordem da árvore e, dentro dela, FAT KG decrescente (AIC-288). |
 | 4.2 | Mix do cliente 17351 nos últimos 6 meses. | respondida | Janela de 6 meses. |
 | 4.3 | Quais produtos o cliente 17351 comprou? Só leite em pó. | respondida | Filtro **antes** dos totais e das participações. |
-| 4.4 | Qual o mix de produtos? | esclarecimento | Pergunta qual cliente (ou responde no nível pedido, conforme catálogo). |
-| 4.5 | Mix do cliente "Fulano de Tal Inexistente". | esclarecimento | Cliente não encontrado: o agente não pode inventar. |
+| 4.4 | Qual o mix de produtos? | esclarecimento ou respondida | Sem cliente, o mix é da carteira inteira (ou o agente pergunta). Anotar qual dos dois aconteceu. |
+| 4.5 | Mix do cliente "Fulano de Tal Inexistente". | esclarecimento ou respondida (vazia) | Cliente não encontrado: o agente não pode inventar linha. |
 
 Item só com bonificação compõe o KG, mas **não** entra no mix.
 
@@ -114,8 +114,10 @@ A resposta não pode chamar o cliente de "novo" nem de "recuperado"; essa leitur
 ## 8. Operações reconhecidas mas sem executor
 
 O classificador reconhece outras perguntas do glossário (curva ABC, frequência de compra,
-churn de produto, etc.). Elas devem responder com status `fora_de_escopo`, dizendo que
-**ainda não estão disponíveis**, e não com um número. Exemplos:
+churn de produto, etc.). Elas respondem **"essa análise ainda não está disponível nesta
+versão do agente"**, sem número, hoje com status **`erro`** (`answer_question.py`). Vale
+decidir se esse caso deveria ter status próprio: para quem lê o log, `erro` mistura
+"não implementado" com falha técnica. Exemplos:
 
 - Qual a curva ABC dos clientes em 2026?
 - Qual a frequência de compra do cliente 17351?
