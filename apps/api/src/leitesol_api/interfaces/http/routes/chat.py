@@ -98,6 +98,27 @@ def query_chat(
         status_code = 503
 
     chat_data = to_chat_payload(response)
+    # A conversa volta para a tela mesmo com o histórico desligado, para ela
+    # mandar o mesmo id na próxima pergunta.
+    chat_data["chatId"] = question.chat_id or new_conversation_id()
+    if history is not None:
+        # Grava depois de responder: o Warehouse não atrasa a resposta e uma
+        # falha ao gravar não chega ao usuário.
+        operation = response.operation
+        background.add_task(
+            record_safely,
+            history,
+            Exchange(
+                conversation_id=chat_data["chatId"],
+                owner=owner_of(user),
+                question=question.question,
+                answer=chat_data["answer"],
+                correlation_id=correlation_id,
+                operation_id=operation.operation_id if operation else None,
+                status=response.status.value,
+            ),
+        )
+
     payload = build_response_payload(
         data=chat_data,
         message=f"Pergunta processada: {response.status.value}.",
