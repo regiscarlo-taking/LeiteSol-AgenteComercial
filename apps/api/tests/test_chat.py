@@ -42,6 +42,7 @@ def test_answered_response_becomes_text_and_table() -> None:
     assert payload["answer"].startswith("Resumo.")
     table = payload["sqlResult"]
     assert table["sql"] is None
+    assert table["operationId"] == "OP12"
     assert table["rowCount"] == len(table["rows"]) == 1
     # A tela indexa cada linha pelo rótulo da coluna.
     assert set(table["rows"][0]) == set(table["columns"])

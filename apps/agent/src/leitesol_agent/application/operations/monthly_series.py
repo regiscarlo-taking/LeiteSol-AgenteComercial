@@ -1,9 +1,8 @@
-"""OP17 - gerar_serie_e_grafico_12_meses (skill Histórico e Evolução de Vendas).
+"""OP17 - série mensal com janela selecionável (skill Histórico e Evolução de Vendas).
 
-Regra do catálogo: 12 competências FECHADAS (TR01), terminando na última
-fechada salvo pedido; meses sem venda entram com zero; os mesmos filtros nas
-doze competências. O mês vigente só entra se pedido, e com aviso. A entrega
-desta fase é a tabela da série: não há gráfico na interface (D-A19).
+Regra do catálogo: até 12 competências FECHADAS (TR01), terminando na última
+fechada salvo pedido; meses sem venda entram com zero e os mesmos filtros são
+aplicados em toda a janela. O mês vigente só entra se pedido, e com aviso.
 """
 
 from datetime import date
@@ -30,6 +29,8 @@ from leitesol_agent.application.operations.common import (
     universe_where,
 )
 from leitesol_agent.domain.models import Notice, Period, Scope
+
+SUPPORTED_WINDOWS = frozenset({3, 6, 9, 12})
 
 
 def months_back(end_month: date, count: int) -> list[date]:
@@ -95,7 +96,17 @@ class MonthlySeries:
 
     def run(self, fetcher: SqlFetcher, values: dict[str, Any], scope: Scope) -> OperationResult:
         notices: list[Notice] = []
-        window = values.get("janela_meses") or 12
+        window = values.get("janela_meses", 12)
+        if window is None:
+            window = 12
+        if (
+            isinstance(window, bool)
+            or not isinstance(window, int)
+            or window not in SUPPORTED_WINDOWS
+        ):
+            return OperationResult.clarification(
+                "A série mensal aceita janelas de 3, 6, 9 ou 12 meses. Qual você quer consultar?"
+            )
         include_current = bool(values.get("incluir_mes_atual"))
 
         last_closed = last_closed_month(fetcher)
@@ -145,9 +156,6 @@ class MonthlySeries:
                     "A base começa em janeiro de 2025: os meses anteriores aparecem com zero por falta de dado, não por ausência de venda.",
                 )
             )
-        notices.append(
-            Notice("FORMATO", "resposta", "Nesta versão a evolução é apresentada em tabela, sem gráfico.")
-        )
         return OperationResult(
             period=Period(
                 start=start,

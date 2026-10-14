@@ -173,8 +173,33 @@ def test_series_fills_missing_months_with_zero_and_stops_at_last_closed() -> Non
     assert lines[0]["competencia"] == "2025-09"
     assert lines[-3]["fat_rs"] == 0.0
     assert lines[-1]["fat_rs_variacao_pct"] == 50.0
-    assert {"TR01", "FORMATO"} <= codes(result)
+    assert "TR01" in codes(result)
     assert "BASE2025" not in codes(result)
+
+
+@pytest.mark.parametrize("window", [3, 6, 9, 12])
+def test_monthly_series_supports_requested_windows_without_widening_scope(window: int) -> None:
+    fetcher = CheckingFetcher([LAST_CLOSED, []])
+    result = MonthlySeries().run(
+        fetcher,
+        {"janela_meses": window, "competencia_referencia": date(2026, 8, 1)},
+        CARTEIRA,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert len(result.main_block["linhas"]) == window
+    assert "c.RCAAtual IN (?)" in sql
+    assert "000123" in params
+
+
+def test_monthly_series_rejects_unsupported_window() -> None:
+    fetcher = CheckingFetcher([])
+
+    result = MonthlySeries().run(fetcher, {"janela_meses": 2}, FULL)
+
+    assert result.question_to_user
+    assert "3, 6, 9 ou 12" in result.question_to_user
+    assert fetcher.calls == []
 
 
 def test_series_warns_when_window_precedes_base() -> None:

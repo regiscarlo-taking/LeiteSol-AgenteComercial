@@ -30,6 +30,8 @@ def build_usage_record(
     record: dict[str, Any] = {
         "momento": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
         "correlation_id": response.correlation_id,
+        "event_type": "llm_usage",
+        "severity": "info",
         "status": response.status.value,
         "operacao": response.operation.operation_id if response.operation else None,
         "modelo": usage.model,
@@ -62,8 +64,7 @@ def record_usage(
             from leitesol_api.infrastructure.azure_storage import get_blob_storage_gateway
 
             store = get_blob_storage_gateway()
-        # Um arquivo por dia: uso/AAAA-MM-DD.jsonl.
-        store.append_line(f"uso/{record['momento'][:10]}.jsonl", line)
+        store.append_line("gateway/logs.jsonl", line)
     except Exception:
         logger.warning(
             "Usage record failed correlation_id=%s", response.correlation_id, exc_info=True

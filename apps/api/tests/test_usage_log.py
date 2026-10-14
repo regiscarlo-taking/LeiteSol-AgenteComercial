@@ -39,6 +39,8 @@ def test_record_has_tokens_and_no_content() -> None:
     assert record == {
         "momento": "2026-09-30T12:00:00+00:00",
         "correlation_id": "abc",
+        "event_type": "llm_usage",
+        "severity": "info",
         "status": "respondida",
         "operacao": "OP12",
         "modelo": "gemini-x",
@@ -62,13 +64,14 @@ def test_blob_is_off_by_default() -> None:
     assert store.lines == []
 
 
-def test_blob_gets_one_line_per_question_in_a_daily_file() -> None:
+def test_blob_gets_one_line_per_question_in_the_shared_log_blob() -> None:
     store = FakeStore()
 
     record_usage(response(LlmUsage("gemini-x", 1, 10, 5)), Settings(usage_log_to_blob=True), store)
 
     [(name, line)] = store.lines
-    assert name.startswith("uso/") and name.endswith(".jsonl")
+    assert name == "gateway/logs.jsonl"
+    assert json.loads(line)["event_type"] == "llm_usage"
     assert "custo_estimado" not in json.loads(line)
     assert "leitesol.com.br" not in line
 

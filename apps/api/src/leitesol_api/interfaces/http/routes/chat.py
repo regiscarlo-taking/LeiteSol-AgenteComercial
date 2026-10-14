@@ -45,6 +45,7 @@ def to_chat_payload(response: AgentResponse) -> dict[str, Any]:
         "answer": text,
         "sqlResult": {
             "entity": operation.get("nome_tecnico") or MAIN_TABLE,
+            "operationId": operation.get("id"),
             "sql": None,
             "columns": labels,
             "rows": rows,

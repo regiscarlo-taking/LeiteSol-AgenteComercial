@@ -99,10 +99,13 @@ Para persistir esses registros no Blob privado existente, configure o mesmo
 valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
 usado pelo Docker Compose (ou forneça as duas variáveis ao iniciar os serviços
 diretamente), configure conta/container de Storage e defina
-`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. A API grava arquivos JSONL diários em
-`gateway/YYYY-MM-DD/info.jsonl`, `warning.jsonl` e `error.jsonl`. Sem a gravação
-no Blob, os logs estruturados continuam no stdout do gateway e da API. Falhas
-de persistência são registradas como warning e não interrompem as requisições.
+`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. Todos os níveis e, quando
+`LEITESOL_API_USAGE_LOG_TO_BLOB=true`, os registros de consumo da LLM são
+anexados ao mesmo append blob `gateway/logs.jsonl`; cada linha JSONL identifica
+severidade e tipo do evento, sem criar blobs por data ou categoria. O blob é
+criado na primeira gravação se ainda não existir. Sem a gravação no Blob, os
+logs estruturados continuam no stdout do gateway e da API. Falhas de
+persistência são registradas como warning e não interrompem as requisições.
 
 Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
 máxima do token nas rotas protegidas; o gateway mantém o access token em cookie
@@ -123,6 +126,22 @@ mínimo:
 Não armazene nessas tabelas corpos de request/response, bearer tokens, cookies ou
 senhas. Use `trace_id` como chave comum do gateway até a API; `call_id` distingue
 retries ou múltiplas chamadas downstream.
+
+Para persistir o conteúdo das conversas (separado dos logs técnicos), sugiro
+este modelo relacional:
+
+| Tabela | Finalidade / colunas principais |
+| --- | --- |
+| `Conversation` | Uma conversa pertencente ao usuário: `conversation_id` (PK), `user_id` (ou subject pseudonimizado), `title`, `status`, `created_at`, `updated_at`, `deleted_at`. |
+| `ConversationMessage` | Mensagens ordenadas: `message_id` (PK), `conversation_id` (FK), `sequence_no`, `role` (`user`/`assistant`/`system`), `content`, `created_at`, `trace_id` (FK lógica para `RequestTrace`, nullable), `status`; unique (`conversation_id`, `sequence_no`). |
+| `MessageAttachment` | Metadados e referência privada ao arquivo: `attachment_id` (PK), `message_id` (FK), `blob_key`, `file_name`, `mime_type`, `size_bytes`, `created_at`; armazenar o arquivo no Blob privado, não como binário SQL. |
+| `AgentExecution` | Resultado técnico ligado à resposta: `execution_id` (PK), `message_id` (FK), `trace_id`, `operation_id`, `started_at`, `finished_at`, `status`, `error_code` sanitizado. |
+
+Indexe `Conversation(user_id, updated_at)` e
+`ConversationMessage(conversation_id, sequence_no)`. A API deve verificar a
+propriedade da conversa em toda leitura/escrita, e a política de retenção deve
+ser definida antes de persistir mensagens: elas podem conter dados comerciais
+sensíveis. Não persista tokens, credenciais nem SQL com parâmetros sensíveis.
 
 ## Ditar perguntas por voz
 
@@ -186,6 +205,16 @@ A resposta usa o envelope padrão da API (`data`, `statusCode`, `success`,
 `traceId`) e contém `chartType`, `categories`, `series` e metadados dos eixos.
 A mesma especificação pode ser passada a Recharts, Chart.js, ECharts ou outro
 renderizador escolhido pela interface.
+
+No chat, a operação OP17 gera automaticamente uma linha de tendência a partir
+da série mensal, usando o endpoint autenticado `/chat/chart` (via gateway).
+Informe uma janela por consulta: “evolução do faturamento dos últimos 3 meses”,
+“6 meses”, “9 meses” ou “12 meses”. A janela padrão continua sendo 12 meses;
+meses sem venda aparecem com zero e a tabela também contém a variação mensal.
+O gráfico usa FAT R$ quando disponível. A consulta e o gráfico preservam a
+alçada comercial do usuário; ampliar o período não amplia sua carteira. Para
+comparar anos, use a operação de comparação de período e gere o gráfico com as
+colunas atual/anterior conforme o exemplo da seção acima.
 
 Análises comerciais que podem alimentar esse fluxo, respeitando as operações
 já implementadas no agente:

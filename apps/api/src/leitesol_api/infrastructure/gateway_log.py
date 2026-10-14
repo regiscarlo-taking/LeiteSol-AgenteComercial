@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from leitesol_api.infrastructure.settings import Settings
@@ -32,7 +31,6 @@ def record_gateway_request(
 
             store = get_blob_storage_gateway()
 
-        log_date = datetime.now(UTC).date().isoformat()
-        store.append_line(f"gateway/{log_date}/{record.severity}.jsonl", line)
+        store.append_line("gateway/logs.jsonl", line)
     except Exception:
         logger.warning("Gateway log persistence failed trace_id=%s", record.trace_id, exc_info=True)

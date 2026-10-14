@@ -1,6 +1,7 @@
 import "../../../app/App.css";
 import { VoiceToText } from "../../../shared/components/VoiceToText";
 
+import { MonthlySeriesChart } from "./MonthlySeriesChart";
 import { useChatWorkspace } from "../hooks/useChatWorkspace";
 
 export const ChatWorkspace = () => {
@@ -106,6 +107,16 @@ export const ChatWorkspace = () => {
                       </div>
                       <small>{message.sqlResult.rowCount} linhas retornadas</small>
                     </section>
+                  ) : null}
+
+                  {message.chart ? (
+                    <MonthlySeriesChart chart={message.chart} />
+                  ) : null}
+
+                  {message.chartError ? (
+                    <p className="chart-error" role="status">
+                      {message.chartError}
+                    </p>
                   ) : null}
                 </article>
               ))}

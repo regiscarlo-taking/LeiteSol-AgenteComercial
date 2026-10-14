@@ -51,6 +51,7 @@ export interface ChatAttachment {
 
 export interface ChatSqlResult {
   entity: string;
+  operationId?: string | null;
   sql?: string | null;
   columns: string[];
   rows: Array<Record<string, unknown>>;
@@ -139,6 +140,8 @@ export interface ChatMessage {
   createdAt: string;
   attachments?: ChatAttachment[] | null;
   sqlResult?: ChatSqlResult | null;
+  chart?: ChartSpecification | null;
+  chartError?: string | null;
   agentAnswer?: AgentAnswer | null;
 }
 
