@@ -1,8 +1,9 @@
 """OP13 - ranquear_clientes (skill Desempenho Comercial).
 
 Regra do catálogo: período obrigatório; "volume" = FAT KG (com toneladas),
-FAT R$ só quando pedido; Top 20 por padrão; participante padrão = cliente +
-loja, CNPJ ou rede só quando a pergunta citar; filtros aplicados ANTES do
+FAT R$ só quando pedido; Top 20 por padrão; participante padrão = rede
+(cliente agrupado, como o Power BI ranqueia — comparação de 13-10, AIC-289),
+cliente + loja ou CNPJ só quando a pergunta citar; filtros aplicados ANTES do
 ranking.
 
 Desempate (Adm. Vendas, 29-09, AIC-289): no mesmo valor da métrica, vence o
@@ -44,6 +45,7 @@ PARTICIPANTS = {
 # Métrica do ranking -> coluna agregada que ordena (toneladas ordena igual a KG).
 RANK_COLUMN = {"fat_kg": "fat_kg", "fat_tons": "fat_kg", "fat_rs": "fat_rs"}
 DEFAULT_TOP_N = 20
+DEFAULT_GRANULARITY = "rede"
 
 
 def tie_break_order(rank_column: str) -> str:
@@ -62,7 +64,7 @@ def build_query(
     scope: Scope,
     product: tuple[str, list[Any]] | None = None,
 ) -> tuple[str, list[Any]]:
-    key, name_expr = PARTICIPANTS[values.get("granularidade_cliente") or "cliente_loja"]
+    key, name_expr = PARTICIPANTS[values.get("granularidade_cliente") or DEFAULT_GRANULARITY]
     rank_column = RANK_COLUMN[values.get("metrica_ranking") or "fat_kg"]
     where = universe_where(values, scope, product)
 

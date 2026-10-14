@@ -256,8 +256,8 @@ Análises comerciais que podem alimentar esse fluxo, respeitando as operações
 já implementadas no agente:
 
 - **Ranking de vendedores:** “Quem vendeu mais FAT KG nos últimos três meses?”.
-  O ranking usa a métrica solicitada, credita a venda ao vendedor da transação
-  e considera as competências fechadas; “FAT R$” pode ser pedido explicitamente.
+  O ranking usa a métrica solicitada, credita a venda ao vendedor atual do
+  cliente e considera as competências fechadas; “FAT R$” pode ser pedido explicitamente.
   O ranking composto permanece indisponível até homologação comercial.
 - **Ranking de produtos:** “Quais produtos tiveram maior volume vendido nos
   últimos 6 meses?”; por padrão, exibe Top 20 em FAT KG.
