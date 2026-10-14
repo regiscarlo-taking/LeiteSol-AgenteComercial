@@ -105,18 +105,50 @@ def month_label(value: date) -> str:
     return value.strftime("%Y-%m")
 
 
+# O cadastro grava os códigos com zeros à esquerda: cliente 017351, loja 01
+# (ClienteId 01735101) e grupo de venda 000534. Quem pergunta digita "17351" ou
+# "534"; sem recompor os zeros, o filtro não acha nada e a resposta vem vazia.
+CLIENT_CODE_WIDTH = 6
+CLIENT_ID_WIDTH = 8
+GROUP_CODE_WIDTH = 6
+
+
+def padded(value: str, width: int) -> list[str]:
+    """O valor como veio e, se for número mais curto, com os zeros recompostos."""
+    if value.isdigit() and len(value) < width:
+        return [value, value.zfill(width)]
+    return [value]
+
+
+def _in(column: str, values: list[str]) -> str:
+    return f"{column} IN ({', '.join('?' for _ in values)})"
+
+
 def client_filter(text: str) -> tuple[str, list[Any]]:
     digits = "".join(char for char in text if char.isdigit())
     cnpj = "REPLACE(REPLACE(REPLACE(c.CNPJ, '.', ''), '/', ''), '-', '')"
     if len(digits) == 14:
         return f"{cnpj} = ?", [digits]
-    if len(digits) == 8:
-        return "c.CNPJRaiz = ?", [digits]
     value = text.strip()
+    if len(digits) == 8 and value == digits:
+        # Oito dígitos é raiz de CNPJ OU código de cliente + loja (01735101).
+        return "(c.CNPJRaiz = ? OR c.ClienteId = ?)", [digits, digits]
+    client_ids = padded(value, CLIENT_ID_WIDTH) if len(value) == CLIENT_ID_WIDTH - 1 else [value]
+    client_codes = padded(value, CLIENT_CODE_WIDTH)
+    groups = padded(value, GROUP_CODE_WIDTH)
+    clause = (
+        f"({_in('c.ClienteId', client_ids)} OR {_in('c.ClienteCodigo', client_codes)} "
+        f"OR {_in('c.Rede', groups)} OR UPPER(c.GrupoVendaDescricao) = ?)"
+    )
+    return clause, [*client_ids, *client_codes, *groups, normalize_term(value)]
+
+
+def group_filter(text: str) -> tuple[str, list[Any]]:
+    value = text.strip()
+    groups = padded(value, GROUP_CODE_WIDTH)
     return (
-        "(c.ClienteId = ? OR c.ClienteCodigo = ? OR c.Rede = ? "
-        "OR UPPER(c.GrupoVendaDescricao) = ?)",
-        [value, value, value, normalize_term(value)],
+        f"({_in('c.Rede', groups)} OR {_in('c.GrupoVendaCodigo', groups)})",
+        [*groups, *groups],
     )
 
 
@@ -189,10 +221,16 @@ def universe_where(
         where.add(clause, *params)
     if values.get("cliente_loja"):
         value = values["cliente_loja"].strip()
-        where.add("(c.ClienteId = ? OR c.ClienteCodigo = ?)", value, value)
+        client_ids = padded(value, CLIENT_ID_WIDTH) if len(value) == CLIENT_ID_WIDTH - 1 else [value]
+        client_codes = padded(value, CLIENT_CODE_WIDTH)
+        where.add(
+            f"({_in('c.ClienteId', client_ids)} OR {_in('c.ClienteCodigo', client_codes)})",
+            *client_ids,
+            *client_codes,
+        )
     if values.get("rede_id"):
-        value = values["rede_id"].strip()
-        where.add("(c.Rede = ? OR c.GrupoVendaCodigo = ?)", value, value)
+        clause, params = group_filter(values["rede_id"])
+        where.add(clause, *params)
     if product:
         where.add(product[0], *product[1])
     filter_clauses, filter_params = compile_where_filters(values.get("where", []))
