@@ -25,7 +25,8 @@ VIEW_KNOWLEDGE = (
         "Bonif_Kg, Dev_Kg, "
         "FlagCompraValida.",
         "FAT R$ = Vendas_R - Dev_R; FAT KG = Vendas_Kg + Bonif_Kg - Dev_Kg; "
-        "FAT TONS = FAT KG / 1000. "
+        "FAT TONS = FAT KG / 1000; preço médio R$/kg = soma FAT R$ / soma FAT KG, "
+        "nunca média simples dos preços mensais. "
         "Grão mensal; a base começa em janeiro de 2025 e exclui cargas sinistradas "
         "faturadas para transportadora.",
         ("faturamento", "venda", "vendas", "volume", "valor", "kg", "tons", "receita"),

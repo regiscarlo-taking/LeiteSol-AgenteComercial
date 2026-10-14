@@ -11,7 +11,7 @@ from leitesol_agent.application.where_filters import (
     compile_where_filters,
     validate_where_filters,
 )
-from leitesol_agent.domain.models import Operation, Scope
+from leitesol_agent.domain.models import Catalog, Operation, Scope
 from leitesol_agent.infrastructure import gemini
 from leitesol_agent.infrastructure.gemini import GeminiLanguageModel
 from leitesol_agent.infrastructure.view_knowledge import retrieve_view_context
@@ -148,6 +148,7 @@ def test_parameter_prompt_contains_view_context_and_where_allowlist(monkeypatch)
         ("Compare os últimos 6 meses", 6),
         ("Faturamento dos últimos 9 meses", 9),
         ("Evolução dos últimos 12 meses", 12),
+        ("Média dos últimos 120 meses", 120),
         ("Compare 3, 6, 9 e 12 meses", [3, 6, 9, 12]),
         ("Evolução mensal", None),
     ],
@@ -223,6 +224,105 @@ def test_explicit_regions_use_official_region_level_even_if_model_defaults_to_uf
 
     assert raw["nivel_geografico"] == "regiao"
     assert raw["janela_meses"] == 3
+
+
+def test_general_price_per_kg_routes_to_aggregate_operation_without_llm(monkeypatch) -> None:
+    from leitesol_agent.infrastructure.catalog import _with_application_operations
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    catalog = _with_application_operations(Catalog(operations=(), transversal_rules={}))
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: pytest.fail("Generic weighted price must use the fixed local operation."),
+    )
+
+    intent = model.classify_intent(
+        "media de faturamento por kilo nos ultimos 6 meses",
+        catalog,
+    )
+
+    assert intent == "consultar_preco_medio_geral_por_kg"
+
+
+def test_general_price_per_kg_uses_the_requested_month_window(monkeypatch) -> None:
+    from leitesol_agent.application.operations.average_price_per_kg import (
+        average_price_per_kg_operation,
+    )
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    operation = average_price_per_kg_operation()
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: {
+            "janela_meses": 12,
+            "periodo_inicio": "2026-04-01",
+            "periodo_fim": "2026-10-31",
+            "data_referencia": "2026-10-14",
+        },
+    )
+
+    raw = model.extract_parameters(
+        "media de faturamento por kilo nos ultimos 6 meses",
+        operation,
+        date(2026, 10, 14),
+    )
+    validated = validate_parameters(operation, raw)
+
+    assert raw["janela_meses"] == 6
+    assert "periodo_inicio" not in raw
+    assert "periodo_fim" not in raw
+    assert "data_referencia" not in raw
+    assert validated.values["janela_meses"] == 6
+    assert validated.is_complete
+
+
+@pytest.mark.parametrize("window", [6, 9, 10, 12, 120])
+def test_general_price_per_kg_extracts_any_explicit_month_window(
+    monkeypatch,
+    window: int,
+) -> None:
+    from leitesol_agent.application.operations.average_price_per_kg import (
+        average_price_per_kg_operation,
+    )
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    operation = average_price_per_kg_operation()
+    monkeypatch.setattr(model, "_generate_json", lambda _: {})
+
+    raw = model.extract_parameters(
+        f"media de faturamento por kilo nos ultimos {window} meses",
+        operation,
+        date(2026, 10, 14),
+    )
+    validated = validate_parameters(operation, raw)
+
+    assert raw["janela_meses"] == window
+    assert validated.values["janela_meses"] == window
+    assert validated.is_complete
+
+
+def test_customer_price_comparison_is_not_rerouted_to_general_aggregate(monkeypatch) -> None:
+    from leitesol_agent.infrastructure.catalog import _with_application_operations
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    catalog = _with_application_operations(
+        Catalog(
+            operations=(
+                Operation("OP07", "SK01", "analisar_tendencia_ticket_medio", "ticket", "Ticket", None),
+            ),
+            transversal_rules={},
+        )
+    )
+    monkeypatch.setattr(model, "_generate_json", lambda _: {"intencao_id": "analisar_tendencia_ticket_medio"})
+
+    intent = model.classify_intent(
+        "Compare o ticket médio por kg do cliente nos últimos 6 meses",
+        catalog,
+    )
+
+    assert intent == "analisar_tendencia_ticket_medio"
 
 
 def test_op17_rejects_unsupported_or_ambiguous_month_windows() -> None:

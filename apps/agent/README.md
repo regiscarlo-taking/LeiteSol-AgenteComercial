@@ -44,6 +44,10 @@ nem abre conexão: recebe tudo pelo construtor de `AnswerQuestion`.
   o indicador composto continua bloqueado até homologação. A janela padrão é
   de três competências fechadas, e o vendedor da transação é diferente do RCA
   atual usado para aplicar a alçada.
+- `APP_PRICE_PER_KG` calcula o preço médio geral por kg como FAT R$ total
+  dividido por FAT KG total nas competências solicitadas; não calcula a média
+  simples dos preços mensais, aceita qualquer quantidade positiva de meses
+  fechados e não substitui a comparação de ticket por cliente da OP07.
 - O catálogo recebido do Fabric é complementado em memória por
   `APP_SALES_BREAKDOWN`, uma
   operação local fixa para ranking por produto, totais por UF/região/município

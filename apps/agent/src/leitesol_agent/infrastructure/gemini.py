@@ -13,17 +13,32 @@ from typing import Any
 import httpx
 
 from leitesol_agent.application.where_filters import filter_fields_for_prompt
+from leitesol_agent.application.operations.average_price_per_kg import (
+    INTENT_ID as AVERAGE_PRICE_PER_KG_INTENT,
+)
 from leitesol_agent.domain.models import Catalog, Operation
 from leitesol_agent.domain.usage import UsageMeter
 from leitesol_agent.infrastructure.view_knowledge import retrieve_view_context
 
 _MONTH_WINDOW = re.compile(
-    r"\b(?:[úu]ltim[oa]s?\s+)?((?:\d{1,2}\s*(?:,|e|ou|a)\s*)*\d{1,2})\s+mes(?:es)?\b",
+    r"\b(?:[úu]ltim[oa]s?\s+)?((?:\d+\s*(?:,|e|ou|a)\s*)*\d+)\s+mes(?:es)?\b",
     re.IGNORECASE,
 )
 _REGION_LEVEL = re.compile(r"\bregi(?:ão|ao|ões|oes)\b", re.IGNORECASE)
 _MUNICIPALITY_LEVEL = re.compile(r"\bmunic[ií]pio(?:s)?\b|\bcidade(?:s)?\b", re.IGNORECASE)
 _STATE_LEVEL = re.compile(r"\b(?:uf|estado|estados)\b", re.IGNORECASE)
+_GENERAL_PRICE_PER_KG = re.compile(
+    r"\b(?:m[eé]dia|pre[cç]o|ticket)\b.{0,80}"
+    r"(?:\br\$\s*/\s*kg\b|\bpor\s+(?:kg|quilo|kilo)s?\b)"
+    r"|(?:\br\$\s*/\s*kg\b|\bpor\s+(?:kg|quilo|kilo)s?\b).{0,80}"
+    r"\b(?:m[eé]dia|pre[cç]o|ticket)\b",
+    re.IGNORECASE,
+)
+_CUSTOMER_OR_COMPARISON = re.compile(
+    r"\b(?:cliente|clientes|cnpj|loja|rede|carteira|comparar|compare|"
+    r"comparativo|subiu|caiu|queda|evolu[cç][aã]o|tend[eê]ncia|ascens[aã]o|est[aá]vel)\b",
+    re.IGNORECASE,
+)
 
 
 def _requested_month_window(question: str) -> int | list[int] | None:
@@ -32,7 +47,7 @@ def _requested_month_window(question: str) -> int | list[int] | None:
         dict.fromkeys(
             int(number)
             for match in matches
-            for number in re.findall(r"\d{1,2}", match)
+            for number in re.findall(r"\d+", match)
         )
     )
     if len(values) == 1:
@@ -49,6 +64,14 @@ def _requested_geographic_level(question: str) -> str | None:
     if _REGION_LEVEL.search(question):
         return "regiao"
     return None
+
+
+def _is_general_price_per_kg_question(question: str) -> bool:
+    """Selects the aggregate ratio only when no customer trend is requested."""
+    return bool(
+        _GENERAL_PRICE_PER_KG.search(question)
+        and not _CUSTOMER_OR_COMPARISON.search(question)
+    )
 
 
 class GeminiError(RuntimeError):
@@ -86,6 +109,11 @@ class GeminiLanguageModel:
         )
 
     def classify_intent(self, question: str, catalog: Catalog) -> str | None:
+        if _is_general_price_per_kg_question(question):
+            operation = catalog.by_intent(AVERAGE_PRICE_PER_KG_INTENT)
+            if operation is not None:
+                return operation.intent_id
+
         options = "\n".join(
             f"- {op.intent_id}: "
             + (
@@ -151,9 +179,11 @@ class GeminiLanguageModel:
         if operation.operation_id == "OP17":
             if requested_window is not None:
                 result["janela_meses"] = requested_window
-        elif operation.operation_id in {"OP14", "APP_SALES_BREAKDOWN"} and isinstance(
-            requested_window, int
-        ):
+        elif operation.operation_id in {
+            "OP14",
+            "APP_SALES_BREAKDOWN",
+            "APP_PRICE_PER_KG",
+        } and isinstance(requested_window, int):
             result["janela_meses"] = requested_window
             result.pop("periodo_inicio", None)
             result.pop("periodo_fim", None)

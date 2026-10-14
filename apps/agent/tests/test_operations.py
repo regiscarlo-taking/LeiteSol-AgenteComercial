@@ -4,6 +4,9 @@ from typing import Any
 import pytest
 
 from leitesol_agent.application.operations.monthly_series import MonthlySeries, months_back
+from leitesol_agent.application.operations.average_price_per_kg import (
+    AveragePricePerKg,
+)
 from leitesol_agent.application.operations.product_mix import ProductMix, window
 from leitesol_agent.application.operations.rank_clients import RankClients
 from leitesol_agent.application.operations.rank_representatives import RankRepresentatives
@@ -39,6 +42,75 @@ NOT_OPEN = [{"TemParcial": 0}]
 
 def codes(result) -> set[str]:
     return {notice.code for notice in result.notices}
+
+
+# -------------------------------------------------------- preço médio por kg
+
+def test_average_price_per_kg_divides_period_totals_and_preserves_scope() -> None:
+    fetcher = CheckingFetcher(
+        [
+            LAST_CLOSED,
+            [{"fat_rs": 900.0, "fat_kg": 300.0}],
+        ]
+    )
+    result = AveragePricePerKg().run(
+        fetcher,
+        {"janela_meses": 6},
+        CARTEIRA,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert "SUM(f.Vendas_R - f.Dev_R) AS fat_rs" in sql
+    assert "SUM(f.Vendas_Kg + f.Bonif_Kg - f.Dev_Kg) AS fat_kg" in sql
+    assert "c.RCAAtual IN (?)" in sql
+    assert params == (date(2026, 3, 1), date(2026, 9, 1), "000123")
+    assert result.main_block["linhas"] == [
+        {"fat_rs": 900.0, "fat_kg": 300, "preco_medio_kg": 3.0}
+    ]
+    assert result.period.start == date(2026, 3, 1)
+    assert result.period.end_exclusive == date(2026, 9, 1)
+
+
+def test_average_price_per_kg_does_not_report_zero_when_denominator_is_invalid() -> None:
+    result = AveragePricePerKg().run(
+        CheckingFetcher([LAST_CLOSED, [{"fat_rs": 300.0, "fat_kg": 0.0}]]),
+        {"janela_meses": 6},
+        FULL,
+    )
+
+    assert result.main_block["linhas"][0]["preco_medio_kg"] is None
+    assert "PRECO_MEDIO_NAO_CALCULAVEL" in codes(result)
+
+
+@pytest.mark.parametrize(
+    ("window", "expected_start", "expected_end"),
+    [
+        (9, date(2025, 12, 1), date(2026, 9, 1)),
+        (10, date(2025, 11, 1), date(2026, 9, 1)),
+        (12, date(2025, 9, 1), date(2026, 9, 1)),
+        (24, date(2024, 9, 1), date(2026, 9, 1)),
+    ],
+)
+def test_average_price_per_kg_accepts_arbitrary_positive_window(
+    window: int,
+    expected_start: date,
+    expected_end: date,
+) -> None:
+    fetcher = CheckingFetcher([LAST_CLOSED, [{"fat_rs": 600.0, "fat_kg": 200.0}]])
+
+    result = AveragePricePerKg().run(fetcher, {"janela_meses": window}, FULL)
+
+    assert result.question_to_user is None
+    assert result.period.start == expected_start
+    assert result.period.end_exclusive == expected_end
+
+
+@pytest.mark.parametrize("window", [0, -1, True, 6.5, "10"])
+def test_average_price_per_kg_rejects_invalid_window(window: Any) -> None:
+    result = AveragePricePerKg().run(CheckingFetcher([]), {"janela_meses": window}, FULL)
+
+    assert result.question_to_user
+    assert "número positivo" in result.question_to_user
 
 
 # ------------------------------------------------------------------ parâmetros

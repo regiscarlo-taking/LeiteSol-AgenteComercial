@@ -22,4 +22,17 @@ def test_catalog_adds_local_analysis_only_once() -> None:
 
     enriched = _with_application_operations(_with_application_operations(catalog))
 
-    assert len(enriched.operations) == 1
+    assert {operation.operation_id for operation in enriched.operations} == {
+        "APP_SALES_BREAKDOWN",
+        "APP_PRICE_PER_KG",
+    }
+
+
+def test_catalog_includes_general_price_per_kg_operation() -> None:
+    catalog = _with_application_operations(Catalog(operations=(), transversal_rules={}))
+
+    operation = catalog.by_intent("consultar_preco_medio_geral_por_kg")
+
+    assert operation is not None
+    assert operation.operation_id == "APP_PRICE_PER_KG"
+    assert operation.parameters[0].default == "6"

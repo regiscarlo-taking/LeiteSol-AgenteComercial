@@ -267,6 +267,11 @@ já implementadas no agente:
   `IA_COMUM.ESTADOS.REGIAO`. “Quais produtos venderam mais em cada UF?” lista
   o Top 5 por UF. A janela padrão dessas análises é de três competências
   fechadas, podendo ser 3, 6, 9 ou 12 meses.
+- **Preço médio geral por kg:** “Qual foi a média de faturamento por quilo nos
+  últimos 10 meses?” divide o FAT R$ total pelo FAT KG total das dez
+  competências fechadas. Aceita qualquer quantidade positiva de meses e
+  preserva a alçada e os filtros. É uma razão ponderada dos totais, não uma
+  média simples dos preços mensais nem uma comparação por cliente (OP07).
 - Essas consultas continuam sujeitas à alçada do usuário e aos filtros
   estruturados. O filtro geográfico usa o cadastro do cliente, não `UFVenda`.
   Elas são totais absolutos, não a comparação histórica regional descrita no

@@ -10,6 +10,9 @@ import time
 from collections import defaultdict
 from typing import Any, Protocol
 
+from leitesol_agent.application.operations.average_price_per_kg import (
+    average_price_per_kg_operation,
+)
 from leitesol_agent.application.operations.sales_breakdowns import local_analysis_operation
 from leitesol_agent.domain.models import Catalog, Operation, Parameter
 
@@ -84,25 +87,31 @@ def build_catalog(
 
 
 def _with_application_operations(catalog: Catalog) -> Catalog:
-    """Adds the fixed local analysis contract absent from the Fabric catalog."""
-    operation = local_analysis_operation()
-    by_id = next(
-        (item for item in catalog.operations if item.operation_id == operation.operation_id),
-        None,
-    )
-    by_intent = catalog.by_intent(operation.intent_id)
-    if by_id or by_intent:
-        if (
-            by_id is not None
-            and by_intent is by_id
-            and by_id.intent_id == operation.intent_id
-        ):
-            return catalog
-        raise ValueError(
-            "The Fabric catalog conflicts with the reserved application analysis operation."
+    """Adds fixed local analysis contracts absent from the Fabric catalog."""
+    local_operations = (local_analysis_operation(), average_price_per_kg_operation())
+    operations = list(catalog.operations)
+    for operation in local_operations:
+        by_id = next(
+            (item for item in operations if item.operation_id == operation.operation_id),
+            None,
         )
+        by_intent = next(
+            (item for item in operations if item.intent_id == operation.intent_id),
+            None,
+        )
+        if by_id is not None or by_intent is not None:
+            if (
+                by_id is None
+                or by_intent is not by_id
+                or by_id.intent_id != operation.intent_id
+            ):
+                raise ValueError(
+                    "The Fabric catalog conflicts with a reserved application analysis operation."
+                )
+            continue
+        operations.append(operation)
     return Catalog(
-        operations=tuple(sorted((*catalog.operations, operation), key=lambda item: item.operation_id)),
+        operations=tuple(sorted(operations, key=lambda item: item.operation_id)),
         transversal_rules=catalog.transversal_rules,
     )
 
