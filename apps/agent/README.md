@@ -42,8 +42,9 @@ nem abre conexão: recebe tudo pelo construtor de `AnswerQuestion`.
 - O texto da resposta é redigido depois, a partir do resultado.
 - OP14 ranqueia representantes por uma métrica explícita (FAT KG ou FAT R$);
   o indicador composto continua bloqueado até homologação. A janela padrão é
-  de três competências fechadas, e o vendedor da transação é diferente do RCA
-  atual usado para aplicar a alçada.
+  de três competências fechadas. A venda é creditada ao vendedor atual do
+  cliente (`c.RCAAtual`), o mesmo usado na alçada; o vendedor da transação só
+  entra com `tipo_atribuicao=vendedor_da_venda`, para conferência.
 - O catálogo recebido do Fabric é complementado em memória por
   `APP_SALES_BREAKDOWN`, uma
   operação local fixa para ranking por produto, totais por UF/região/município

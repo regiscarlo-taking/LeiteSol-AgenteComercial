@@ -62,7 +62,10 @@ def build_query(
     scope: Scope,
     product: tuple[str, list[Any]] | None = None,
 ) -> tuple[str, list[Any]]:
-    attribution = values.get("tipo_atribuicao") or "vendedor_da_venda"
+    # A venda é do vendedor atual do cliente (regra homologada pela Adm. Vendas,
+    # igual ao "vend atual" do Power BI). O vendedor da transação fica só para
+    # conferência, quando pedido explicitamente.
+    attribution = values.get("tipo_atribuicao") or "carteira_atual"
     if attribution == "carteira_atual":
         participant_id, participant_name, role_column, manager_id, manager_name = (
             "c.RCAAtual",
