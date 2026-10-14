@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from leitesol_api.domain.measure import Measure
@@ -190,6 +190,27 @@ class FabricSqlConnection:
         except Exception as error:
             logger.exception("Fabric fixed query failed database=%s", self._database)
             raise FabricConnectionError("Unable to query the Fabric warehouse.") from error
+
+    def execute(self, statements: Sequence[tuple[str, tuple[Any, ...]]]) -> None:
+        """Grava, numa transação só, os comandos fixos do histórico de conversa.
+
+        A identidade do backend só tem INSERT no schema IA_APP
+        (17_historico_conversa.sql); IA_COMERCIAL segue somente leitura. A
+        checagem abaixo é defesa extra: escrita fora de IA_APP nem sai daqui.
+        """
+        for sql, _ in statements:
+            if not sql.lstrip().upper().startswith("INSERT INTO IA_APP."):
+                raise FabricConnectionError("Only inserts into IA_APP are allowed.")
+        try:
+            import pyodbc
+
+            with pyodbc.connect(self._connection_string(), timeout=self._timeout) as connection:
+                cursor = connection.cursor()
+                for sql, params in statements:
+                    cursor.execute(sql, params)
+        except Exception as error:
+            logger.exception("Fabric write failed database=%s", self._database)
+            raise FabricConnectionError("Unable to write to the Fabric warehouse.") from error
 
     def describe_entity(self, entity: str) -> list[str]:
         selected_entity = self._get_entity(entity)

@@ -105,6 +105,12 @@ class GatewayLogRecord(BaseModel):
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+    # Conversa à qual a pergunta pertence; sem ela, o backend abre uma nova.
+    chat_id: str | None = Field(
+        default=None, alias="chatId", pattern=r"^[A-Za-z0-9_-]{1,64}$"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ChatQueryResponse(BaseModel):
