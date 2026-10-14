@@ -6,12 +6,13 @@ import {
 } from "react";
 
 import type {
+  ChartSpecification,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
 } from "@leitesol/contracts";
 
-import { queryChat } from "../../../shared/api";
+import { createChart, queryChat } from "../../../shared/api";
 
 import {
   chatFormSchema,
@@ -170,7 +171,50 @@ export const useChatWorkspace = () => {
 
       const chatResponse = await queryChat(
         parsed.data.message,
+        currentChat.id,
       );
+      const sqlResult = chatResponse.data?.sqlResult ?? null;
+      let chart: ChartSpecification | null = null;
+      let chartError: string | null = null;
+
+      if (sqlResult?.operationId === "OP17" && sqlResult.rows.length > 0) {
+        const categoryColumn =
+          sqlResult.columns.find((column) => /compet[eê]ncia/i.test(column)) ??
+          sqlResult.columns[0];
+        const metricColumns = sqlResult.columns.filter(
+          (column) =>
+            column !== categoryColumn &&
+            !/varia[çc][ãa]o/i.test(column) &&
+            sqlResult.rows.some((row) => typeof row[column] === "number"),
+        );
+        const valueColumn =
+          metricColumns.find((column) => /FAT R\$/i.test(column)) ??
+          metricColumns[0];
+
+        if (categoryColumn && valueColumn) {
+          try {
+            const chartResponse = await createChart({
+              columns: sqlResult.columns,
+              rows: sqlResult.rows,
+              categoryColumn,
+              valueColumns: [valueColumn],
+              chartType: "line",
+              title: `Evolução mensal de ${valueColumn}`,
+            });
+            chart = chartResponse.data;
+            if (!chart) {
+              chartError = "A API não retornou os dados do gráfico.";
+            }
+          } catch (chartRequestError) {
+            chartError =
+              chartRequestError instanceof Error
+                ? chartRequestError.message
+                : "Não foi possível gerar o gráfico.";
+          }
+        } else {
+          chartError = "O resultado não contém dados suficientes para gerar o gráfico.";
+        }
+      }
 
       const backendContent =
         chatResponse.data?.answer ??
@@ -182,8 +226,9 @@ export const useChatWorkspace = () => {
         content: backendContent,
         createdAt: new Date().toISOString(),
         attachments: null,
-        sqlResult:
-          chatResponse.data?.sqlResult ?? null,
+        sqlResult,
+        chart,
+        chartError,
       };
 
       const updatedConversation: ChatConversation = {

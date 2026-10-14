@@ -1,17 +1,26 @@
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse
 from leitesol_agent.application.answer_question import AnswerQuestion
 from leitesol_agent.domain.models import AgentResponse, ResponseStatus
 
 from leitesol_api.infrastructure.auth import TokenData, verify_token
+from leitesol_api.infrastructure.conversation_history import (
+    ConversationHistory,
+    Exchange,
+    new_conversation_id,
+    owner_of,
+    record_safely,
+)
 from leitesol_api.infrastructure.fabric import FabricConnectionError
 from leitesol_api.infrastructure.gemini import GeminiError
 from leitesol_api.infrastructure.settings import get_settings
 from leitesol_api.infrastructure.usage_log import record_usage
+from leitesol_api.interfaces.http.routes.chats import conversation_history_factory
 from leitesol_api.interfaces.http.routes.questions import answer_question_factory
 from leitesol_api.interfaces.responses import build_response_payload
 from leitesol_api.interfaces.schemas import ChatQueryRequest
@@ -45,6 +54,7 @@ def to_chat_payload(response: AgentResponse) -> dict[str, Any]:
         "answer": text,
         "sqlResult": {
             "entity": operation.get("nome_tecnico") or MAIN_TABLE,
+            "operationId": operation.get("id"),
             "sql": None,
             "columns": labels,
             "rows": rows,
@@ -57,8 +67,10 @@ def to_chat_payload(response: AgentResponse) -> dict[str, Any]:
 def query_chat(
     question: ChatQueryRequest,
     request: Request,
+    background: BackgroundTasks,
     user: TokenData = Depends(verify_token),
     build_use_case: Callable[[], AnswerQuestion] = Depends(answer_question_factory),
+    history: ConversationHistory | None = Depends(conversation_history_factory),
 ) -> JSONResponse:
     correlation_id = getattr(request.state, "request_id", None) or "sem-correlation-id"
     try:
@@ -85,11 +97,28 @@ def query_chat(
         )
         status_code = 503
 
+    chat_data = to_chat_payload(response)
     payload = build_response_payload(
-        data=to_chat_payload(response),
+        data=chat_data,
         message=f"Pergunta processada: {response.status.value}.",
         status_code=status_code,
         metadata={"status": response.status.value},
         trace_id=correlation_id,
+    )
+    logger.info(
+        "chat_exchange %s",
+        json.dumps(
+            {
+                "event": "chat_exchange",
+                "trace_id": correlation_id,
+                "question": question.question,
+                "response": {
+                    "status": response.status.value,
+                    **chat_data,
+                },
+            },
+            ensure_ascii=False,
+            default=str,
+        ),
     )
     return JSONResponse(status_code=status_code, content=payload)

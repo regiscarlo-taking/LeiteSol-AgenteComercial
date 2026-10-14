@@ -74,6 +74,8 @@ def _missing_question(parameter: Parameter) -> str:
 def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedParameters:
     result = ValidatedParameters()
     for parameter in operation.parameters:
+        if operation.operation_id == "OP17" and parameter.name == "janela_meses":
+            continue
         value = raw.get(parameter.name)
         if isinstance(value, str):
             value = value.strip() or None
@@ -114,6 +116,22 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
             result.values[parameter.name] = flag
         else:
             result.values[parameter.name] = str(value)
+
+    if operation.operation_id == "OP17":
+        raw_window = raw.get("janela_meses")
+        if isinstance(raw_window, str):
+            raw_window = raw_window.strip() or None
+        if raw_window is None:
+            result.values["janela_meses"] = 12
+        else:
+            window = _parse_int(raw_window)
+            if window in {3, 6, 9, 12}:
+                result.values["janela_meses"] = window
+            else:
+                result.questions.append(
+                    "A série mensal aceita janelas de 3, 6, 9 ou 12 meses. "
+                    "Qual você quer consultar?"
+                )
 
     # Pergunta repetida (ex.: início e fim ausentes) aparece uma vez só.
     where_filters, filter_questions = validate_where_filters(raw.get("where"))

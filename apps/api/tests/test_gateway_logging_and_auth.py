@@ -33,16 +33,23 @@ def gateway_log(severity: str = "info") -> GatewayLogRecord:
     )
 
 
-def test_gateway_log_writes_separate_daily_blob_by_severity() -> None:
+def test_gateway_log_writes_all_severities_to_one_blob() -> None:
     store = FakeStore()
-    record = gateway_log("warning")
 
-    record_gateway_request(record, Settings(gateway_log_to_blob=True), store)
+    for severity in ("info", "warning", "error"):
+        record_gateway_request(
+            gateway_log(severity),
+            Settings(gateway_log_to_blob=True),
+            store,
+        )
 
-    [(name, line)] = store.lines
-    assert name == f"gateway/{datetime.now(UTC).date().isoformat()}/warning.jsonl"
-    assert json.loads(line)["traceId"] == record.trace_id
-    assert "body" not in line
+    assert [name for name, _ in store.lines] == ["gateway/logs.jsonl"] * 3
+    assert [json.loads(line)["severity"] for _, line in store.lines] == [
+        "info",
+        "warning",
+        "error",
+    ]
+    assert all("body" not in line for _, line in store.lines)
 
 
 def test_gateway_log_ingestion_requires_shared_api_key(monkeypatch) -> None:

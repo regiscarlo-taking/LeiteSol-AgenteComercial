@@ -4,7 +4,9 @@ import type { CreateChartRequest } from "@leitesol/contracts";
 
 import {
   fetchBackendChart,
+  fetchBackendChat,
   fetchBackendChatQuery,
+  fetchBackendChats,
 } from "../services/backend-client.js";
 
 export const chatsRouter = Router();
@@ -42,25 +44,87 @@ const isChartRequest = (value: unknown): value is CreateChartRequest => {
   );
 };
 
+// Mesmo formato que a API aceita: chat-<uuid> ou outro id sem espaço/barra.
+const isChatId = (value: unknown): value is string =>
+  typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+
+// Histórico do usuário logado; a API filtra pelo dono do token.
+chatsRouter.get("/chats", async (request, response, next) => {
+  try {
+    const result = await fetchBackendChats(
+      response.locals.traceId,
+      request.header("authorization"),
+    );
+    response.status(result.statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+chatsRouter.get("/chats/:chatId", async (request, response, next) => {
+  try {
+    if (!isChatId(request.params.chatId)) {
+      response.status(404).json({ message: "Chat not found." });
+      return;
+    }
+    const result = await fetchBackendChat(
+      response.locals.traceId,
+      request.params.chatId,
+      request.header("authorization"),
+    );
+    response.status(result.statusCode).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 chatsRouter.post("/chat/query", async (request, response, next) => {
   try {
     const body = request.body as {
       question?: unknown;
+      chatId?: unknown;
       data?: {
         question?: unknown;
+        chatId?: unknown;
       } | null;
     };
     const question = body.data?.question ?? body.question;
+    const rawChatId = body.data?.chatId ?? body.chatId;
 
     if (typeof question !== "string" || !question.trim()) {
       response.status(400).json({ message: "Question is required." });
       return;
     }
 
+    if (rawChatId != null && !isChatId(rawChatId)) {
+      response.status(400).json({ message: "Invalid chat id." });
+      return;
+    }
+    const chatId = isChatId(rawChatId) ? rawChatId : undefined;
+
     const result = await fetchBackendChatQuery(
       response.locals.traceId,
       question,
       request.header("authorization"),
+      chatId,
+    );
+    const logMethod =
+      result.statusCode >= 500
+        ? console.error
+        : result.statusCode >= 400
+          ? console.warn
+          : console.info;
+    logMethod(
+      JSON.stringify({
+        event: "chat_exchange",
+        traceId: response.locals.traceId,
+        question,
+        response: {
+          statusCode: result.statusCode,
+          answer: result.data?.answer ?? null,
+          sqlResult: result.data?.sqlResult ?? null,
+        },
+      }),
     );
     response.status(result.statusCode).json(result);
   } catch (error) {

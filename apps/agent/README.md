@@ -13,7 +13,7 @@ e entrega a ele a conexão com o Warehouse, a alçada do usuário e a chave do G
 | `application/parameters.py` | Validação do que a LLM extraiu contra o catálogo |
 | `application/where_filters.py` | Filtros `WHERE` estruturados, allowlist de campos/operações e validação |
 | `application/charts.py` | Conversão de resultados tabulares em especificações de gráfico JSON |
-| `application/operations/` | Uma classe por operação do catálogo, com o SQL fixo e a regra de negócio |
+| `application/operations/` | Operações com SQL fixo e regra de negócio; inclui executores do catálogo e análises locais de dimensões fechadas |
 | `infrastructure/catalog.py` | Leitura do catálogo `IA_COMERCIAL.AGT_*`, com cache |
 | `infrastructure/gemini.py` | Provedor Gemini: classificar, extrair parâmetros, redigir |
 | `infrastructure/view_knowledge.py` | Contexto local recuperável das views a partir do mapeamento comercial |
@@ -40,6 +40,23 @@ nem abre conexão: recebe tudo pelo construtor de `AnswerQuestion`.
   o grão mensal, e termos de produto continuam sujeitos ao vocabulário cadastrado.
 - Sem alçada resolvida, não há consulta.
 - O texto da resposta é redigido depois, a partir do resultado.
+- OP14 ranqueia representantes por uma métrica explícita (FAT KG ou FAT R$);
+  o indicador composto continua bloqueado até homologação. A janela padrão é
+  de três competências fechadas, e o vendedor da transação é diferente do RCA
+  atual usado para aplicar a alçada.
+- O catálogo recebido do Fabric é complementado em memória por
+  `APP_SALES_BREAKDOWN`, uma
+  operação local fixa para ranking por produto, totais por UF/região/município
+  e produtos por UF. Não é necessário cadastrar SQL nem permitir SQL livre:
+  suas dimensões e agregações são uma lista fechada no código. O padrão é FAT
+  KG, UF cadastral do cliente quando não for especificado o nível geográfico,
+  e três competências fechadas; são aceitas janelas de 3, 6, 9 ou 12 meses.
+  Pedido explícito por região usa `Regiao` de `vw_dim_cliente`, derivada de
+  `IA_COMUM.ESTADOS.REGIAO` pela UF cadastral. Produtos são Top 20 e produto
+  por UF é Top 5 por UF, salvo limite explicitamente solicitado.
+- Totais absolutos por região não substituem a comparação regional histórica
+  OP16 (ainda sem executor); usam a UF cadastral (`c.UF`), não a UF da
+  transação (`f.UFVenda`).
 
 ## Nova operação
 

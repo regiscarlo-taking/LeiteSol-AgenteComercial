@@ -27,6 +27,7 @@ export type SqlResult = ChatSqlResult;
 export interface ChatQueryResult {
   answer: string;
   sqlResult: SqlResult;
+  chatId?: string;
 }
 
 export const authenticate = async (
@@ -78,12 +79,15 @@ export const logout = async (): Promise<void> => {
 
 export const queryChat = async (
   question: string,
+  chatId?: string,
 ): Promise<BaseResponse<ChatQueryResult>> =>
-  requestApi<ChatQueryResult, { question: string }>({
+  requestApi<ChatQueryResult, { question: string; chatId?: string }>({
     url: "/api/chat/query",
     method: "POST",
     data: {
       question,
+      // O backend grava a pergunta no histórico desta conversa.
+      ...(chatId ? { chatId } : {}),
     },
     errorMessage: "Nao foi possivel processar a pergunta no Gemini.",
   });

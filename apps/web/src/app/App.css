@@ -401,6 +401,66 @@ button {
   min-width: 0;
 }
 
+.monthly-chart {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(245, 236, 217, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.monthly-chart h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.monthly-chart-scroll {
+  overflow-x: auto;
+}
+
+.monthly-chart svg {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+}
+
+.chart-grid-line {
+  stroke: rgba(245, 236, 217, 0.12);
+  stroke-dasharray: 4 5;
+}
+
+.chart-axis-text {
+  fill: rgba(245, 236, 217, 0.72);
+  font-size: 11px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.78rem;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-legend i {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+}
+
+.chart-error {
+  margin-top: 0.75rem !important;
+  color: #ffb5a9;
+  font-size: 0.85rem;
+}
+
 .query-result code {
   overflow: auto;
   color: #ffd08c;

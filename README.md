@@ -91,18 +91,25 @@ pnpm dev:agent
 Cada requisição recebida pelo gateway ganha um `X-Request-ID` novo. O gateway
 propaga o identificador para a API e o devolve no cabeçalho da resposta. Um
 registro JSON correlaciona método/rota da requisição com status/duração da
-resposta. Senhas, cookies, tokens, query strings e corpos não são registrados,
-pois podem conter dados comerciais. Respostas 4xx são warnings; respostas 5xx
-são errors.
+resposta. Senhas, cookies, tokens e query strings não são registrados. Para
+diagnóstico do chat, o gateway e o backend também imprimem o evento JSON
+`chat_exchange` com a pergunta e a resposta (`answer` e linhas de
+`sqlResult`), correlacionados pelo mesmo `traceId`. Esses eventos são enviados
+ao console/fluxo de logs dos serviços, não adicionados ao registro de auditoria no
+Blob. Como podem conter dados comerciais, restrinja o acesso aos logs.
+Respostas 4xx são warnings; respostas 5xx são errors.
 
 Para persistir esses registros no Blob privado existente, configure o mesmo
 valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
 usado pelo Docker Compose (ou forneça as duas variáveis ao iniciar os serviços
 diretamente), configure conta/container de Storage e defina
-`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. A API grava arquivos JSONL diários em
-`gateway/YYYY-MM-DD/info.jsonl`, `warning.jsonl` e `error.jsonl`. Sem a gravação
-no Blob, os logs estruturados continuam no stdout do gateway e da API. Falhas
-de persistência são registradas como warning e não interrompem as requisições.
+`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. Todos os níveis e, quando
+`LEITESOL_API_USAGE_LOG_TO_BLOB=true`, os registros de consumo da LLM são
+anexados ao mesmo append blob `gateway/logs.jsonl`; cada linha JSONL identifica
+severidade e tipo do evento, sem criar blobs por data ou categoria. O blob é
+criado na primeira gravação se ainda não existir. Sem a gravação no Blob, os
+logs estruturados continuam no console/fluxo de logs do gateway e da API. Falhas de
+persistência são registradas como warning e não interrompem as requisições.
 
 Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
 máxima do token nas rotas protegidas; o gateway mantém o access token em cookie
@@ -123,6 +130,54 @@ mínimo:
 Não armazene nessas tabelas corpos de request/response, bearer tokens, cookies ou
 senhas. Use `trace_id` como chave comum do gateway até a API; `call_id` distingue
 retries ou múltiplas chamadas downstream.
+
+## Histórico de conversas
+
+Implementado a partir do modelo sugerido abaixo, no schema **`IA_APP`** do
+Warehouse `AgenteFaturamentoDW`, separado do `IA_COMERCIAL` do agente. O script
+das tabelas e da permissão é o `17_historico_conversa.sql` do repositório de
+documentação (`docs/projeto/modelo-semantico-fabric/sql/`).
+
+- `IA_APP.CONVERSA` (Conversation) e `IA_APP.CONVERSA_MENSAGEM`
+  (ConversationMessage). A `AgentExecution` virou colunas da mensagem do
+  assistente (`OperacaoId`, `StatusResposta`, `CorrelationId`). A
+  `MessageAttachment` não foi criada porque o MVP não recebe anexo.
+- **Só inserção.** O Warehouse derruba `UPDATE`/`DELETE` concorrentes na mesma
+  tabela. Por isso a data de atualização é a da última mensagem e não há
+  exclusão lógica. A identidade do backend recebe só `SELECT` + `INSERT` em
+  `IA_APP` e continua somente leitura em `IA_COMERCIAL`.
+- Guarda o texto da pergunta e o da resposta, **não a tabela de resultado**.
+  Ao reabrir uma conversa, a resposta volta só como texto.
+- `POST /chat/query` aceita `chatId` (a tela manda o id da conversa ativa) e
+  devolve `chatId`. Sem `chatId`, o backend gera um. A gravação roda depois da
+  resposta, e uma falha ao gravar vira só um aviso no log.
+- `GET /chats` lista as conversas do usuário logado (até 50, mais recentes
+  primeiro) e `GET /chats/{chatId}` abre uma delas. Toda leitura filtra pelo
+  dono: o e-mail do token do Entra ID, ou o nome do usuário no login local.
+  Uma conversa de outro usuário responde 404. O gateway expõe as duas rotas em
+  `/api/chats`.
+- Fica desligado por padrão (`LEITESOL_API_CONVERSATION_HISTORY_ENABLED=false`).
+  Só ligue depois de rodar o script e definir a política de retenção, porque a
+  resposta pode conter valor comercial.
+
+Falta na tela: listar as conversas (`listChats`) e reabrir uma delas
+(`getChat`). Os dois já existem em `apps/web/src/shared/api.ts`.
+
+Para persistir o conteúdo das conversas (separado dos logs técnicos), sugiro
+este modelo relacional:
+
+| Tabela | Finalidade / colunas principais |
+| --- | --- |
+| `Conversation` | Uma conversa pertencente ao usuário: `conversation_id` (PK), `user_id` (ou subject pseudonimizado), `title`, `status`, `created_at`, `updated_at`, `deleted_at`. |
+| `ConversationMessage` | Mensagens ordenadas: `message_id` (PK), `conversation_id` (FK), `sequence_no`, `role` (`user`/`assistant`/`system`), `content`, `created_at`, `trace_id` (FK lógica para `RequestTrace`, nullable), `status`; unique (`conversation_id`, `sequence_no`). |
+| `MessageAttachment` | Metadados e referência privada ao arquivo: `attachment_id` (PK), `message_id` (FK), `blob_key`, `file_name`, `mime_type`, `size_bytes`, `created_at`; armazenar o arquivo no Blob privado, não como binário SQL. |
+| `AgentExecution` | Resultado técnico ligado à resposta: `execution_id` (PK), `message_id` (FK), `trace_id`, `operation_id`, `started_at`, `finished_at`, `status`, `error_code` sanitizado. |
+
+Indexe `Conversation(user_id, updated_at)` e
+`ConversationMessage(conversation_id, sequence_no)`. A API deve verificar a
+propriedade da conversa em toda leitura/escrita, e a política de retenção deve
+ser definida antes de persistir mensagens: elas podem conter dados comerciais
+sensíveis. Não persista tokens, credenciais nem SQL com parâmetros sensíveis.
 
 ## Ditar perguntas por voz
 
@@ -187,9 +242,35 @@ A resposta usa o envelope padrão da API (`data`, `statusCode`, `success`,
 A mesma especificação pode ser passada a Recharts, Chart.js, ECharts ou outro
 renderizador escolhido pela interface.
 
+No chat, a operação OP17 gera automaticamente uma linha de tendência a partir
+da série mensal, usando o endpoint autenticado `/chat/chart` (via gateway).
+Informe uma janela por consulta: “evolução do faturamento dos últimos 3 meses”,
+“6 meses”, “9 meses” ou “12 meses”. A janela padrão continua sendo 12 meses;
+meses sem venda aparecem com zero e a tabela também contém a variação mensal.
+O gráfico usa FAT R$ quando disponível. A consulta e o gráfico preservam a
+alçada comercial do usuário; ampliar o período não amplia sua carteira. Para
+comparar anos, use a operação de comparação de período e gere o gráfico com as
+colunas atual/anterior conforme o exemplo da seção acima.
+
 Análises comerciais que podem alimentar esse fluxo, respeitando as operações
 já implementadas no agente:
 
+- **Ranking de vendedores:** “Quem vendeu mais FAT KG nos últimos três meses?”.
+  O ranking usa a métrica solicitada, credita a venda ao vendedor da transação
+  e considera as competências fechadas; “FAT R$” pode ser pedido explicitamente.
+  O ranking composto permanece indisponível até homologação comercial.
+- **Ranking de produtos:** “Quais produtos tiveram maior volume vendido nos
+  últimos 6 meses?”; por padrão, exibe Top 20 em FAT KG.
+- **Vendas por região:** “Qual UF teve maior volume vendido?” usa a UF
+  cadastral do cliente e lista os totais por UF. Se pedir explicitamente
+  “região”, o agrupamento usa `Regiao` do cadastro, mapeada por
+  `IA_COMUM.ESTADOS.REGIAO`. “Quais produtos venderam mais em cada UF?” lista
+  o Top 5 por UF. A janela padrão dessas análises é de três competências
+  fechadas, podendo ser 3, 6, 9 ou 12 meses.
+- Essas consultas continuam sujeitas à alçada do usuário e aos filtros
+  estruturados. O filtro geográfico usa o cadastro do cliente, não `UFVenda`.
+  Elas são totais absolutos, não a comparação histórica regional descrita no
+  catálogo OP16; essa comparação ainda não tem executor nesta versão.
 - **Evolução mensal:** “Mostre a evolução do faturamento dos últimos 12 meses.” Use
   `Competência` no eixo X e FAT R$ ou FAT KG como série; `auto` escolhe linha.
 - **Comparação anual:** “Compare o faturamento de janeiro a junho de 2026 com o

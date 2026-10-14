@@ -42,12 +42,14 @@ def test_answered_response_becomes_text_and_table() -> None:
     assert payload["answer"].startswith("Resumo.")
     table = payload["sqlResult"]
     assert table["sql"] is None
+    assert table["operationId"] == "OP12"
     assert table["rowCount"] == len(table["rows"]) == 1
     # A tela indexa cada linha pelo rótulo da coluna.
     assert set(table["rows"][0]) == set(table["columns"])
 
 
-def test_chat_route_uses_the_catalog_flow() -> None:
+def test_chat_route_uses_the_catalog_flow_and_logs_question_and_answer(caplog) -> None:
+    caplog.set_level("INFO", logger="leitesol.api.http.chat")
     use_case = AnswerQuestion(
         catalog=FakeCatalog(),
         scopes=FixedScope(Scope(sees_everything=True)),
@@ -62,6 +64,9 @@ def test_chat_route_uses_the_catalog_flow() -> None:
     assert body["metadata"]["status"] == "fora_de_escopo"
     assert "fora do que o agente responde" in body["data"]["answer"]
     assert body["data"]["sqlResult"]["rows"] == []
+    assert '"event": "chat_exchange"' in caplog.text
+    assert '"question": "pedidos em aberto?"' in caplog.text
+    assert '"answer": "Essa pergunta está fora do que o agente responde hoje.' in caplog.text
 
 
 def test_chat_route_hides_technical_failure() -> None:
