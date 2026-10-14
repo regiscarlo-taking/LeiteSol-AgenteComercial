@@ -175,6 +175,56 @@ def test_op17_month_window_overrides_model_and_is_validated(monkeypatch) -> None
     assert validated.is_complete
 
 
+def test_relative_window_for_regional_analysis_ignores_model_generated_dates(monkeypatch) -> None:
+    from leitesol_agent.application.operations.sales_breakdowns import local_analysis_operation
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: {
+            "dimensao": "regiao",
+            "periodo_inicio": "2026-07-14",
+            "periodo_fim": "2026-10-14",
+            "data_referencia": "2026-10-14",
+        },
+    )
+
+    raw = model.extract_parameters(
+        "me traga as regioes que mais venderam por kilo nos ultimos 3 meses",
+        local_analysis_operation(),
+        date(2026, 10, 14),
+    )
+    validated = validate_parameters(local_analysis_operation(), raw)
+
+    assert raw["janela_meses"] == 3
+    assert "periodo_inicio" not in raw
+    assert "periodo_fim" not in raw
+    assert "data_referencia" not in raw
+    assert validated.values["janela_meses"] == 3
+    assert validated.is_complete
+
+
+def test_explicit_regions_use_official_region_level_even_if_model_defaults_to_uf(monkeypatch) -> None:
+    from leitesol_agent.application.operations.sales_breakdowns import local_analysis_operation
+
+    model = GeminiLanguageModel("key", "gemini-test")
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: {"dimensao": "regiao", "nivel_geografico": "uf"},
+    )
+
+    raw = model.extract_parameters(
+        "me traga qual regiao mais vendeu nos ultimos 3 meses",
+        local_analysis_operation(),
+        date(2026, 10, 14),
+    )
+
+    assert raw["nivel_geografico"] == "regiao"
+    assert raw["janela_meses"] == 3
+
+
 def test_op17_rejects_unsupported_or_ambiguous_month_windows() -> None:
     operation = Operation("OP17", "SK", "serie", "serie", "Série", None)
 

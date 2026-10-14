@@ -62,6 +62,24 @@ chatsRouter.post("/chat/query", async (request, response, next) => {
       question,
       request.header("authorization"),
     );
+    const logMethod =
+      result.statusCode >= 500
+        ? console.error
+        : result.statusCode >= 400
+          ? console.warn
+          : console.info;
+    logMethod(
+      JSON.stringify({
+        event: "chat_exchange",
+        traceId: response.locals.traceId,
+        question,
+        response: {
+          statusCode: result.statusCode,
+          answer: result.data?.answer ?? null,
+          sqlResult: result.data?.sqlResult ?? null,
+        },
+      }),
+    );
     response.status(result.statusCode).json(result);
   } catch (error) {
     next(error);

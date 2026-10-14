@@ -21,6 +21,9 @@ _MONTH_WINDOW = re.compile(
     r"\b(?:[úu]ltim[oa]s?\s+)?((?:\d{1,2}\s*(?:,|e|ou|a)\s*)*\d{1,2})\s+mes(?:es)?\b",
     re.IGNORECASE,
 )
+_REGION_LEVEL = re.compile(r"\bregi(?:ão|ao|ões|oes)\b", re.IGNORECASE)
+_MUNICIPALITY_LEVEL = re.compile(r"\bmunic[ií]pio(?:s)?\b|\bcidade(?:s)?\b", re.IGNORECASE)
+_STATE_LEVEL = re.compile(r"\b(?:uf|estado|estados)\b", re.IGNORECASE)
 
 
 def _requested_month_window(question: str) -> int | list[int] | None:
@@ -35,6 +38,17 @@ def _requested_month_window(question: str) -> int | list[int] | None:
     if len(values) == 1:
         return values[0]
     return values or None
+
+
+def _requested_geographic_level(question: str) -> str | None:
+    """Resolve explicit geography words to the supported client dimension."""
+    if _MUNICIPALITY_LEVEL.search(question):
+        return "municipio"
+    if _STATE_LEVEL.search(question):
+        return "uf"
+    if _REGION_LEVEL.search(question):
+        return "regiao"
+    return None
 
 
 class GeminiError(RuntimeError):
@@ -133,10 +147,21 @@ class GeminiLanguageModel:
             f"{self._question_block(question)}"
         )
         result = self._generate_json(prompt)
+        requested_window = _requested_month_window(question)
         if operation.operation_id == "OP17":
-            requested_window = _requested_month_window(question)
             if requested_window is not None:
                 result["janela_meses"] = requested_window
+        elif operation.operation_id in {"OP14", "APP_SALES_BREAKDOWN"} and isinstance(
+            requested_window, int
+        ):
+            result["janela_meses"] = requested_window
+            result.pop("periodo_inicio", None)
+            result.pop("periodo_fim", None)
+            result.pop("data_referencia", None)
+        if operation.operation_id == "APP_SALES_BREAKDOWN":
+            requested_geography = _requested_geographic_level(question)
+            if requested_geography is not None:
+                result["nivel_geografico"] = requested_geography
         return result
 
     def compose_narrative(

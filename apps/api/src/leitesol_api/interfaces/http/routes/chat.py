@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -86,11 +87,28 @@ def query_chat(
         )
         status_code = 503
 
+    chat_data = to_chat_payload(response)
     payload = build_response_payload(
-        data=to_chat_payload(response),
+        data=chat_data,
         message=f"Pergunta processada: {response.status.value}.",
         status_code=status_code,
         metadata={"status": response.status.value},
         trace_id=correlation_id,
+    )
+    logger.info(
+        "chat_exchange %s",
+        json.dumps(
+            {
+                "event": "chat_exchange",
+                "trace_id": correlation_id,
+                "question": question.question,
+                "response": {
+                    "status": response.status.value,
+                    **chat_data,
+                },
+            },
+            ensure_ascii=False,
+            default=str,
+        ),
     )
     return JSONResponse(status_code=status_code, content=payload)

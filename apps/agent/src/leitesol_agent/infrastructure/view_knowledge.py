@@ -41,8 +41,9 @@ VIEW_KNOWLEDGE = (
         "FlagExterior.",
         "Rede agrupa lojas do mesmo grupo de venda ou raiz de CNPJ. "
         "UF/região/município são do cadastro "
-        "atual, não necessariamente da venda. RCAAtual é o vendedor a quem a venda é "
-        "atribuída, como no Power BI. "
+        "atual, não necessariamente da venda. Regiao vem de IA_COMUM.ESTADOS.REGIAO "
+        "mapeada pela UF cadastral; Municipio vem de DIM_MUNICIPIOS. RCAAtual é o "
+        "vendedor a quem a venda é atribuída, como no Power BI. "
         "Exterior é excluído.",
         (
             "cliente",
@@ -177,6 +178,7 @@ VIEW_KNOWLEDGE = (
         "Dimensão de UF, região e país.",
         "Complementa os atributos geográficos do cliente.",
         "UF, região e país.",
+        "Regiao é ESTADOS.REGIAO e relaciona-se à venda pelo UF cadastral do cliente. "
         "Para filtro e agrupamento de vendas, priorizar UF/Regiao/Municipio cadastrais "
         "em vw_dim_cliente; não confundir com UFVenda na fato.",
         ("região", "regiao", "geografia", "país", "pais", "uf", "estado"),

@@ -3,7 +3,9 @@ from leitesol_agent.application.operations.compare_previous_year import CompareW
 from leitesol_agent.application.operations.monthly_series import MonthlySeries
 from leitesol_agent.application.operations.product_mix import ProductMix
 from leitesol_agent.application.operations.rank_clients import RankClients
+from leitesol_agent.application.operations.rank_representatives import RankRepresentatives
 from leitesol_agent.application.operations.returning_clients import ReturningClients
+from leitesol_agent.application.operations.sales_breakdowns import SalesBreakdowns
 from leitesol_agent.application.operations.sellers_below_average import SellersBelowAverage
 
 # Operações do catálogo com executor implementado. As demais são reconhecidas
@@ -14,6 +16,8 @@ OPERATION_HANDLERS: dict[str, OperationHandler] = {
         ReturningClients(),
         CompareWithPreviousYear(),
         RankClients(),
+        RankRepresentatives(),
+        SalesBreakdowns(),
         MonthlySeries(),
         ProductMix(),
         SellersBelowAverage(),

@@ -91,9 +91,13 @@ pnpm dev:agent
 Cada requisição recebida pelo gateway ganha um `X-Request-ID` novo. O gateway
 propaga o identificador para a API e o devolve no cabeçalho da resposta. Um
 registro JSON correlaciona método/rota da requisição com status/duração da
-resposta. Senhas, cookies, tokens, query strings e corpos não são registrados,
-pois podem conter dados comerciais. Respostas 4xx são warnings; respostas 5xx
-são errors.
+resposta. Senhas, cookies, tokens e query strings não são registrados. Para
+diagnóstico do chat, o gateway e o backend também imprimem o evento JSON
+`chat_exchange` com a pergunta e a resposta (`answer` e linhas de
+`sqlResult`), correlacionados pelo mesmo `traceId`. Esses eventos são enviados
+ao console/fluxo de logs dos serviços, não adicionados ao registro de auditoria no
+Blob. Como podem conter dados comerciais, restrinja o acesso aos logs.
+Respostas 4xx são warnings; respostas 5xx são errors.
 
 Para persistir esses registros no Blob privado existente, configure o mesmo
 valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
@@ -104,7 +108,7 @@ diretamente), configure conta/container de Storage e defina
 anexados ao mesmo append blob `gateway/logs.jsonl`; cada linha JSONL identifica
 severidade e tipo do evento, sem criar blobs por data ou categoria. O blob é
 criado na primeira gravação se ainda não existir. Sem a gravação no Blob, os
-logs estruturados continuam no stdout do gateway e da API. Falhas de
+logs estruturados continuam no console/fluxo de logs do gateway e da API. Falhas de
 persistência são registradas como warning e não interrompem as requisições.
 
 Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
@@ -219,6 +223,22 @@ colunas atual/anterior conforme o exemplo da seção acima.
 Análises comerciais que podem alimentar esse fluxo, respeitando as operações
 já implementadas no agente:
 
+- **Ranking de vendedores:** “Quem vendeu mais FAT KG nos últimos três meses?”.
+  O ranking usa a métrica solicitada, credita a venda ao vendedor da transação
+  e considera as competências fechadas; “FAT R$” pode ser pedido explicitamente.
+  O ranking composto permanece indisponível até homologação comercial.
+- **Ranking de produtos:** “Quais produtos tiveram maior volume vendido nos
+  últimos 6 meses?”; por padrão, exibe Top 20 em FAT KG.
+- **Vendas por região:** “Qual UF teve maior volume vendido?” usa a UF
+  cadastral do cliente e lista os totais por UF. Se pedir explicitamente
+  “região”, o agrupamento usa `Regiao` do cadastro, mapeada por
+  `IA_COMUM.ESTADOS.REGIAO`. “Quais produtos venderam mais em cada UF?” lista
+  o Top 5 por UF. A janela padrão dessas análises é de três competências
+  fechadas, podendo ser 3, 6, 9 ou 12 meses.
+- Essas consultas continuam sujeitas à alçada do usuário e aos filtros
+  estruturados. O filtro geográfico usa o cadastro do cliente, não `UFVenda`.
+  Elas são totais absolutos, não a comparação histórica regional descrita no
+  catálogo OP16; essa comparação ainda não tem executor nesta versão.
 - **Evolução mensal:** “Mostre a evolução do faturamento dos últimos 12 meses.” Use
   `Competência` no eixo X e FAT R$ ou FAT KG como série; `auto` escolhe linha.
 - **Comparação anual:** “Compare o faturamento de janeiro a junho de 2026 com o

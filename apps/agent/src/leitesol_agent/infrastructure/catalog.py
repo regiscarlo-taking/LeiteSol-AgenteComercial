@@ -10,6 +10,7 @@ import time
 from collections import defaultdict
 from typing import Any, Protocol
 
+from leitesol_agent.application.operations.sales_breakdowns import local_analysis_operation
 from leitesol_agent.domain.models import Catalog, Operation, Parameter
 
 OPERATIONS_SQL = """
@@ -82,6 +83,30 @@ def build_catalog(
     )
 
 
+def _with_application_operations(catalog: Catalog) -> Catalog:
+    """Adds the fixed local analysis contract absent from the Fabric catalog."""
+    operation = local_analysis_operation()
+    by_id = next(
+        (item for item in catalog.operations if item.operation_id == operation.operation_id),
+        None,
+    )
+    by_intent = catalog.by_intent(operation.intent_id)
+    if by_id or by_intent:
+        if (
+            by_id is not None
+            and by_intent is by_id
+            and by_id.intent_id == operation.intent_id
+        ):
+            return catalog
+        raise ValueError(
+            "The Fabric catalog conflicts with the reserved application analysis operation."
+        )
+    return Catalog(
+        operations=tuple(sorted((*catalog.operations, operation), key=lambda item: item.operation_id)),
+        transversal_rules=catalog.transversal_rules,
+    )
+
+
 class CatalogRepository:
     def __init__(self, fetcher: SqlFetcher, ttl_seconds: int = 600) -> None:
         self._fetcher = fetcher
@@ -93,11 +118,13 @@ class CatalogRepository:
     def get(self) -> Catalog:
         with self._lock:
             if self._cached is None or time.monotonic() - self._loaded_at > self._ttl:
-                self._cached = build_catalog(
-                    self._fetcher.fetch(OPERATIONS_SQL),
-                    self._fetcher.fetch(PARAMETERS_SQL),
-                    self._fetcher.fetch(EXAMPLES_SQL),
-                    self._fetcher.fetch(RULES_SQL),
+                self._cached = _with_application_operations(
+                    build_catalog(
+                        self._fetcher.fetch(OPERATIONS_SQL),
+                        self._fetcher.fetch(PARAMETERS_SQL),
+                        self._fetcher.fetch(EXAMPLES_SQL),
+                        self._fetcher.fetch(RULES_SQL),
+                    )
                 )
                 self._loaded_at = time.monotonic()
             return self._cached
