@@ -164,6 +164,118 @@ def test_ranking_defaults_to_rede_and_store_only_when_asked() -> None:
     assert "GROUP BY c.ClienteId" in store.calls[-1][0]
 
 
+def test_representative_ranking_uses_transaction_seller_and_scope() -> None:
+    rows = [
+        {"posicao": 1, "vendedor_id": "17", "vendedor": "Ana", "papel": "RCA",
+         "fat_rs": 1000, "fat_kg": 500},
+        {"posicao": 2, "vendedor_id": "21", "vendedor": "Beto", "papel": "RCA",
+         "fat_rs": 500, "fat_kg": 300},
+    ]
+    fetcher = CheckingFetcher([LAST_CLOSED, rows, NOT_OPEN])
+    result = RankRepresentatives().run(
+        fetcher,
+        {"metrica_desempenho": "fat_kg", "papel_comercial": "representante"},
+        CARTEIRA,
+    )
+
+    sql, params = fetcher.calls[1]
+    assert "f.VendedorId AS vendedor_id" in sql
+    assert "v.RepresentanteId = f.VendedorId" in sql
+    assert "c.RCAAtual IN (?)" in sql
+    assert "v.PapelComercial IN (?)" in sql
+    assert params[:2] == (date(2026, 6, 1), date(2026, 9, 1))
+    assert result.main_block["linhas"][0]["vendedor"] == "Ana"
+
+
+def test_representative_ranking_refuses_unapproved_composite_metric() -> None:
+    result = RankRepresentatives().run(
+        CheckingFetcher([]),
+        {"metrica_desempenho": "composto"},
+        FULL,
+    )
+
+    assert result.question_to_user and "FAT KG ou FAT R$" in result.question_to_user
+
+
+def test_sales_breakdown_ranks_products_within_each_uf() -> None:
+    rows = [
+        {"uf": "SP", "produto_id": "P1", "produto": "Produto 1", "posicao": 1,
+         "fat_rs": 100, "fat_kg": 60},
+        {"uf": "RJ", "produto_id": "P2", "produto": "Produto 2", "posicao": 1,
+         "fat_rs": 90, "fat_kg": 55},
+    ]
+    fetcher = CheckingFetcher([LAST_CLOSED, rows])
+    result = SalesBreakdowns().run(
+        fetcher,
+        {"dimensao": "produto_por_regiao", "metrica": "fat_kg"},
+        CARTEIRA,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert "PARTITION BY uf ORDER BY fat_kg DESC" in sql
+    assert "ORDER BY fat_kg DESC, uf, produto_id, produto" in sql
+    assert "DESC, c.UF" not in sql
+    assert "ORDER BY uf, posicao" in sql
+    assert "c.UF AS uf" in sql
+    assert "p.ProdutoId AS produto_id" in sql
+    assert "c.RCAAtual IN (?)" in sql
+    assert params == (date(2026, 6, 1), date(2026, 9, 1), "000123", 5)
+    assert [line["uf"] for line in result.main_block["linhas"]] == ["SP", "RJ"]
+    assert [line["fat_kg"] for line in result.main_block["linhas"]] == [60, 55]
+
+
+def test_regional_breakdown_defaults_to_client_uf_and_all_regions() -> None:
+    fetcher = CheckingFetcher(
+        [LAST_CLOSED, [{"uf": "SP", "posicao": 1, "fat_rs": 20, "fat_kg": 10}]]
+    )
+    result = SalesBreakdowns().run(
+        fetcher,
+        {"dimensao": "regiao"},
+        FULL,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert "c.UF AS uf" in sql
+    assert "ORDER BY fat_kg DESC, uf" in sql
+    assert "ORDER BY fat_kg DESC, c.UF" not in sql
+    assert "WHERE posicao <= ?" not in sql
+    assert params == (date(2026, 6, 1), date(2026, 9, 1))
+    assert result.main_block["linhas"][0]["uf"] == "SP"
+
+
+def test_named_region_level_ranks_by_cte_alias() -> None:
+    fetcher = CheckingFetcher(
+        [LAST_CLOSED, [{"regiao": "Sudeste", "posicao": 1, "fat_rs": 20, "fat_kg": 10}]]
+    )
+    SalesBreakdowns().run(
+        fetcher,
+        {"dimensao": "regiao", "nivel_geografico": "regiao"},
+        FULL,
+    )
+
+    sql = fetcher.calls[-1][0]
+    assert "c.Regiao AS regiao" in sql
+    assert "ORDER BY fat_kg DESC, regiao" in sql
+    assert "ORDER BY fat_kg DESC, c.Regiao" not in sql
+
+
+def test_product_breakdown_uses_reference_month_and_returns_rank_order() -> None:
+    fetcher = CheckingFetcher(
+        [LAST_CLOSED, [{"produto_id": "P1", "produto": "Produto", "posicao": 1,
+                        "fat_rs": 20, "fat_kg": 10}]]
+    )
+    SalesBreakdowns().run(
+        fetcher,
+        {"dimensao": "produto", "data_referencia": date(2026, 5, 10)},
+        FULL,
+    )
+
+    sql, params = fetcher.calls[-1]
+    assert params[:2] == (date(2026, 3, 1), date(2026, 6, 1))
+    assert "ORDER BY posicao" in sql
+    assert params[-1] == 20
+
+
 # ------------------------------------------------------------------ série 12 meses
 
 def test_months_back_crosses_the_year() -> None:
@@ -449,3 +561,17 @@ def test_enum_domain_is_case_insensitive() -> None:
     assert validate_parameters(op, {}).values == {"nivel_produto": "sku"}
     mixed_case = validate_parameters(op, {"nivel_produto": "Familia"})
     assert mixed_case.values == {"nivel_produto": "familia"}
+
+
+def test_mix_strips_trailing_spaces_from_source_text() -> None:
+    rows = [mix_row("655", ".01. LPI - LS - FRACIONADO ", 1, 10.0, 5.0,
+                    produto="LEITE EM PO INTEGRAL LA SERENISSIMA 12X700G      ")]
+    result = ProductMix().run(
+        CheckingFetcher([LAST_CLOSED, NOT_OPEN, rows]),
+        {"escopo_cliente": "x", "data_referencia": date(2026, 10, 9)},
+        FULL,
+    )
+
+    line = result.main_block["linhas"][0]
+    assert line["produto"] == "LEITE EM PO INTEGRAL LA SERENISSIMA 12X700G"
+    assert line["familia"] == ".01. LPI - LS - FRACIONADO"
