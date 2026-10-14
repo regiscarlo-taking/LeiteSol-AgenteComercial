@@ -171,6 +171,7 @@ export const useChatWorkspace = () => {
 
       const chatResponse = await queryChat(
         parsed.data.message,
+        currentChat.id,
       );
       const sqlResult = chatResponse.data?.sqlResult ?? null;
       let chart: ChartSpecification | null = null;

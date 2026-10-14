@@ -1,6 +1,8 @@
 import type {
   BaseResponse,
   ChartSpecification,
+  ChatConversation,
+  ChatConversationSummary,
   CreateChartRequest,
   HealthStatus,
   Measure,
@@ -55,6 +57,7 @@ export interface SqlResultResponse {
 export interface ChatQueryResponse {
   answer: string;
   sqlResult: SqlResultResponse;
+  chatId: string;
 }
 
 export class BackendRequestError extends Error {
@@ -266,6 +269,7 @@ export const fetchBackendChatQuery = async (
   traceId: string,
   question: string,
   authorization?: string,
+  chatId?: string,
 ): Promise<BaseResponse<ChatQueryResponse>> => {
   const response = await requestBackend(
     `${env.backendUrl}/chat/query`,
@@ -278,11 +282,44 @@ export const fetchBackendChatQuery = async (
       },
       body: JSON.stringify({
         question,
+        ...(chatId ? { chatId } : {}),
       }),
     },
   );
 
   return readBackendEnvelope<ChatQueryResponse>(response);
+};
+
+export const fetchBackendChats = async (
+  traceId: string,
+  authorization?: string,
+): Promise<BaseResponse<ChatConversationSummary[]>> => {
+  const response = await requestBackend(`${env.backendUrl}/chats`, {
+    headers: {
+      "x-request-id": traceId,
+      ...authorizationHeader(authorization),
+    },
+  });
+
+  return readBackendEnvelope<ChatConversationSummary[]>(response);
+};
+
+export const fetchBackendChat = async (
+  traceId: string,
+  chatId: string,
+  authorization?: string,
+): Promise<BaseResponse<ChatConversation>> => {
+  const response = await requestBackend(
+    `${env.backendUrl}/chats/${encodeURIComponent(chatId)}`,
+    {
+      headers: {
+        "x-request-id": traceId,
+        ...authorizationHeader(authorization),
+      },
+    },
+  );
+
+  return readBackendEnvelope<ChatConversation>(response);
 };
 
 export const fetchBackendChart = async (
