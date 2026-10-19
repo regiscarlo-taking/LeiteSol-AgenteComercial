@@ -10,6 +10,7 @@ import type {
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
+  CreateChartRequest,
 } from "@leitesol/contracts";
 
 import { createChart, queryChat } from "../../../shared/api";
@@ -61,6 +62,131 @@ const toConversationSummary = (
       lastMessage?.content.slice(0, 96) ?? "Sem mensagens ainda.",
     updatedAt: conversation.updatedAt,
     status: conversation.status,
+  };
+};
+
+const buildComparisonChartRequest = (
+  columns: string[],
+  rows: Array<Record<string, unknown>>,
+  question: string,
+): CreateChartRequest | null => {
+  const metricPreference = /\b(?:kg|quilo|kilo|volume)\b/i.test(question)
+    ? "kg"
+    : /\b(?:tonelada|toneladas|tons?)\b/i.test(question)
+      ? "tons"
+      : "r\\$";
+  const metricPatterns = [
+    {
+      key: "r\\$",
+      current: /^(?:fat\s*r\$|fat_rs)(?:\s+|_)atual$/i,
+      previous: /^(?:fat\s*r\$|fat_rs)(?:\s+|_)ano anterior$/i,
+      label: "FAT R$",
+    },
+    {
+      key: "kg",
+      current: /^(?:fat\s*kg|fat_kg)(?:\s+|_)atual$/i,
+      previous: /^(?:fat\s*kg|fat_kg)(?:\s+|_)ano anterior$/i,
+      label: "FAT KG",
+    },
+    {
+      key: "tons",
+      current: /^(?:fat\s*tons?|fat_tons?)(?:\s+|_)atual$/i,
+      previous: /^(?:fat\s*tons?|fat_tons?)(?:\s+|_)ano anterior$/i,
+      label: "FAT TONS",
+    },
+  ];
+  const orderedMetrics = [
+    ...metricPatterns.filter((metric) => metric.key === metricPreference),
+    ...metricPatterns.filter((metric) => metric.key !== metricPreference),
+  ];
+  const selectedMetric = orderedMetrics
+    .map((metric) => ({
+      metric,
+      currentColumn: columns.find((column) =>
+        metric.current.test(column),
+      ),
+      previousColumn: columns.find((column) =>
+        metric.previous.test(column),
+      ),
+    }))
+    .find(
+      (pair) =>
+        pair.currentColumn !== undefined &&
+        pair.previousColumn !== undefined,
+    );
+
+  if (!selectedMetric?.currentColumn || !selectedMetric.previousColumn) {
+    return null;
+  }
+
+  const monthColumn = columns.find((column) => /compet[eê]ncia/i.test(column));
+  if (monthColumn) {
+    const monthRows = rows.filter(
+      (row) =>
+        typeof row[monthColumn] === "string" &&
+        !/total do per[ií]odo/i.test(row[monthColumn]),
+    );
+    if (monthRows.length > 0) {
+      return {
+        columns,
+        rows: monthRows,
+        categoryColumn: monthColumn,
+        valueColumns: [
+          selectedMetric.currentColumn,
+          selectedMetric.previousColumn,
+        ],
+        chartType: "line",
+        title: `Comparativo mensal de ${selectedMetric.metric.label}`,
+      };
+    }
+  }
+
+  const categoryColumn = columns.find(
+    (column) =>
+      !/^(?:fat\s*(?:r\$|kg|tons?)|fat_(?:rs|kg|tons?))(?:\s+|_)(?:atual|ano anterior|varia[çc][ãa]o)/i.test(
+        column,
+      ) &&
+      !/(?:^|_)(?:id|codigo|código)$/i.test(column) &&
+      /cliente|produto|regi[aã]o|munic[ií]pio|^uf$|vendedor|representante/i.test(
+        column,
+      ),
+  );
+  const title = `Comparativo de ${selectedMetric.metric.label}`;
+
+  if (categoryColumn) {
+    return {
+      columns,
+      rows,
+      categoryColumn,
+      valueColumns: [
+        selectedMetric.currentColumn,
+        selectedMetric.previousColumn,
+      ],
+      chartType: "bar",
+      title,
+    };
+  }
+
+  const currentValue = rows[0]?.[selectedMetric.currentColumn];
+  const previousValue = rows[0]?.[selectedMetric.previousColumn];
+  if (
+    typeof currentValue !== "number" ||
+    typeof previousValue !== "number"
+  ) {
+    return null;
+  }
+
+  const valueColumn = selectedMetric.metric.label;
+  return {
+    columns: ["Período", valueColumn],
+    rows: [
+      { Período: "Período atual", [valueColumn]: currentValue },
+      { Período: "Mesmo período do ano anterior", [valueColumn]: previousValue },
+    ],
+    categoryColumn: "Período",
+    valueColumns: [valueColumn],
+    chartType: "bar",
+    title,
   };
 };
 
@@ -213,6 +339,32 @@ export const useChatWorkspace = () => {
           }
         } else {
           chartError = "O resultado não contém dados suficientes para gerar o gráfico.";
+        }
+      } else if (
+        sqlResult?.operationId === "OP12" &&
+        sqlResult.rows.length > 0
+      ) {
+        const chartRequest = buildComparisonChartRequest(
+          sqlResult.columns,
+          sqlResult.rows,
+          parsed.data.message,
+        );
+        if (chartRequest) {
+          try {
+            const chartResponse = await createChart(chartRequest);
+            chart = chartResponse.data;
+            if (!chart) {
+              chartError = "A API não retornou os dados do gráfico.";
+            }
+          } catch (chartRequestError) {
+            chartError =
+              chartRequestError instanceof Error
+                ? chartRequestError.message
+                : "Não foi possível gerar o gráfico.";
+          }
+        } else {
+          chartError =
+            "O resultado não contém uma métrica comparável para gerar o gráfico.";
         }
       }
 

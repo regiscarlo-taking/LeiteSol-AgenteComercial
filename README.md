@@ -244,13 +244,26 @@ renderizador escolhido pela interface.
 
 No chat, a operação OP17 gera automaticamente uma linha de tendência a partir
 da série mensal, usando o endpoint autenticado `/chat/chart` (via gateway).
+Comparações anuais OP12 também geram automaticamente um gráfico de barras:
+totais são exibidos como período atual x mesmo período do ano anterior; quando
+a consulta tem uma dimensão (por exemplo, UF ou produto), essa dimensão vira
+categoria e os valores atual/anterior viram séries separadas. O chat escolhe
+FAT R$ por padrão, ou FAT KG/TONS quando a pergunta pedir explicitamente essa
+métrica, sem misturar unidades no mesmo gráfico. Consultas relativas OP12, como
+“compare os 3 últimos meses com o mesmo período do ano passado”, usam as últimas
+competências fechadas disponíveis e comparam com o intervalo equivalente do ano
+anterior. Também aceitam qualquer quantidade positiva de meses. Períodos com
+datas explícitas continuam sendo respeitados. Quando a pergunta lista os mesmos
+meses em cada ano (por exemplo, “meses 5, 6 e 7 de 2026 contra os meses 5, 6 e 7
+de 2025”), ou compara qualquer intervalo de 2 a 12 competências, o resultado
+detalha cada mês, acrescenta o total do período e o gráfico de linhas mostra
+uma série por ano com um ponto para cada competência. Competências sem
+faturamento aparecem como zero no gráfico.
 Informe uma janela por consulta: “evolução do faturamento dos últimos 3 meses”,
 “6 meses”, “9 meses” ou “12 meses”. A janela padrão continua sendo 12 meses;
 meses sem venda aparecem com zero e a tabela também contém a variação mensal.
-O gráfico usa FAT R$ quando disponível. A consulta e o gráfico preservam a
-alçada comercial do usuário; ampliar o período não amplia sua carteira. Para
-comparar anos, use a operação de comparação de período e gere o gráfico com as
-colunas atual/anterior conforme o exemplo da seção acima.
+As consultas e seus gráficos preservam a alçada comercial do usuário; ampliar
+o período não amplia sua carteira.
 
 Análises comerciais que podem alimentar esse fluxo, respeitando as operações
 já implementadas no agente:

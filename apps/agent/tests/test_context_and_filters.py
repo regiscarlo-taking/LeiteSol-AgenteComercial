@@ -11,7 +11,7 @@ from leitesol_agent.application.where_filters import (
     compile_where_filters,
     validate_where_filters,
 )
-from leitesol_agent.domain.models import Catalog, Operation, Scope
+from leitesol_agent.domain.models import Catalog, Operation, Parameter, Scope
 from leitesol_agent.infrastructure import gemini
 from leitesol_agent.infrastructure.gemini import GeminiLanguageModel
 from leitesol_agent.infrastructure.view_knowledge import retrieve_view_context
@@ -146,6 +146,7 @@ def test_parameter_prompt_contains_view_context_and_where_allowlist(monkeypatch)
     [
         ("Mostre a evolução dos últimos 3 meses", 3),
         ("Compare os últimos 6 meses", 6),
+        ("Compare os 3 últimos meses com o mesmo período do ano passado", 3),
         ("Faturamento dos últimos 9 meses", 9),
         ("Evolução dos últimos 12 meses", 12),
         ("Média dos últimos 120 meses", 120),
@@ -173,6 +174,71 @@ def test_op17_month_window_overrides_model_and_is_validated(monkeypatch) -> None
 
     assert raw["janela_meses"] == 6
     assert validated.values["janela_meses"] == 6
+    assert validated.is_complete
+
+
+def test_op12_relative_month_window_overrides_model_dates_and_is_validated(monkeypatch) -> None:
+    model = GeminiLanguageModel("key", "gemini-test")
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: {
+            "periodo_inicio": "2026-08-01",
+            "periodo_fim": "2026-10-31",
+            "metrica": "fat_rs",
+        },
+    )
+
+    raw = model.extract_parameters(
+        "pode comparar os 3 últimos meses com o mesmo período do ano passado?",
+        OPERATION,
+        date(2026, 10, 15),
+    )
+    validated = validate_parameters(OPERATION, raw)
+
+    assert raw["janela_meses"] == 3
+    assert "periodo_inicio" not in raw
+    assert "periodo_fim" not in raw
+    assert validated.values["janela_meses"] == 3
+    assert validated.is_complete
+
+
+def test_op12_explicit_month_list_is_extracted_exactly_and_validated(monkeypatch) -> None:
+    operation = Operation(
+        "OP12",
+        "SK",
+        "comparar",
+        "comparar_vendas",
+        "Comparar faturamento",
+        None,
+        parameters=(
+            Parameter("periodo_inicio", "date", True, "AAAA-MM-DD", None, "Início"),
+            Parameter("periodo_fim", "date", True, "AAAA-MM-DD", None, "Fim"),
+        ),
+    )
+    model = GeminiLanguageModel("key", "gemini-test")
+    monkeypatch.setattr(
+        model,
+        "_generate_json",
+        lambda _: {
+            "periodo_inicio": "2026-01-01",
+            "periodo_fim": "2026-12-31",
+        },
+    )
+
+    raw = model.extract_parameters(
+        "compare pra mim o mes 5,6 e 7 de 2026 com os meses 5,6 e 7 de 2025",
+        operation,
+        date(2026, 10, 16),
+    )
+    validated = validate_parameters(operation, raw)
+
+    assert raw["periodo_inicio"] == "2026-05-01"
+    assert raw["periodo_fim"] == "2026-07-31"
+    assert raw["comparar_mes_a_mes"] is True
+    assert validated.values["periodo_inicio"] == date(2026, 5, 1)
+    assert validated.values["periodo_fim"] == date(2026, 7, 31)
+    assert validated.values["comparar_mes_a_mes"] is True
     assert validated.is_complete
 
 

@@ -73,8 +73,19 @@ def _missing_question(parameter: Parameter) -> str:
 
 def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedParameters:
     result = ValidatedParameters()
+    if operation.operation_id == "OP12" and raw.get("comparar_mes_a_mes") is True:
+        result.values["comparar_mes_a_mes"] = True
+    relative_comparison_window = (
+        operation.operation_id == "OP12"
+        and _parse_int(raw.get("janela_meses")) is not None
+    )
     for parameter in operation.parameters:
         if operation.operation_id == "OP17" and parameter.name == "janela_meses":
+            continue
+        if (
+            relative_comparison_window
+            and parameter.name in {"periodo_inicio", "periodo_fim"}
+        ):
             continue
         value = raw.get(parameter.name)
         if isinstance(value, str):
@@ -132,6 +143,8 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
                     "A série mensal aceita janelas de 3, 6, 9 ou 12 meses. "
                     "Qual você quer consultar?"
                 )
+    if relative_comparison_window:
+        result.values["janela_meses"] = _parse_int(raw["janela_meses"])
 
     # Pergunta repetida (ex.: início e fim ausentes) aparece uma vez só.
     where_filters, filter_questions = validate_where_filters(raw.get("where"))

@@ -2,11 +2,13 @@ from datetime import date, datetime
 from typing import Any
 
 import pytest
-
-from leitesol_agent.application.operations.monthly_series import MonthlySeries, months_back
 from leitesol_agent.application.operations.average_price_per_kg import (
     AveragePricePerKg,
 )
+from leitesol_agent.application.operations.compare_previous_year import (
+    CompareWithPreviousYear,
+)
+from leitesol_agent.application.operations.monthly_series import MonthlySeries, months_back
 from leitesol_agent.application.operations.product_mix import ProductMix, window
 from leitesol_agent.application.operations.rank_clients import RankClients
 from leitesol_agent.application.operations.rank_representatives import RankRepresentatives
@@ -14,6 +16,8 @@ from leitesol_agent.application.operations.returning_clients import ReturningCli
 from leitesol_agent.application.operations.sales_breakdowns import SalesBreakdowns
 from leitesol_agent.application.operations.sellers_below_average import (
     SellersBelowAverage,
+)
+from leitesol_agent.application.operations.sellers_below_average import (
     shape_rows as sellers_shape,
 )
 from leitesol_agent.application.parameters import validate_parameters
@@ -42,6 +46,79 @@ NOT_OPEN = [{"TemParcial": 0}]
 
 def codes(result) -> set[str]:
     return {notice.code for notice in result.notices}
+
+
+def test_comparison_window_uses_closed_months_and_previous_year() -> None:
+    fetcher = CheckingFetcher([LAST_CLOSED, NOT_OPEN, []])
+
+    result = CompareWithPreviousYear().run(
+        fetcher,
+        {"janela_meses": 3, "metrica": "ambas"},
+        FULL,
+    )
+
+    assert result.period.start == date(2026, 6, 1)
+    assert result.period.end_exclusive == date(2026, 9, 1)
+    assert result.period.comparison_start == date(2025, 6, 1)
+    assert result.period.comparison_end_exclusive == date(2025, 9, 1)
+    assert result.period.partial is False
+    assert fetcher.calls[-1][1][:4] == (
+        date(2026, 6, 1),
+        date(2026, 9, 1),
+        date(2025, 6, 1),
+        date(2025, 9, 1),
+    )
+
+
+def test_comparison_month_by_month_includes_total_period_row() -> None:
+    fetcher = CheckingFetcher(
+        [
+            LAST_CLOSED,
+            NOT_OPEN,
+            [
+                {
+                    "comparison_month": 5,
+                    "fat_rs_atual": 100.0,
+                    "fat_rs_anterior": 90.0,
+                    "fat_kg_atual": 50.0,
+                    "fat_kg_anterior": 45.0,
+                },
+                {
+                    "comparison_month": 7,
+                    "fat_rs_atual": 120.0,
+                    "fat_rs_anterior": 110.0,
+                    "fat_kg_atual": 60.0,
+                    "fat_kg_anterior": 55.0,
+                },
+            ],
+        ]
+    )
+
+    result = CompareWithPreviousYear().run(
+        fetcher,
+        {
+            "periodo_inicio": date(2026, 5, 1),
+            "periodo_fim": date(2026, 7, 31),
+        },
+        FULL,
+    )
+
+    sql, _ = fetcher.calls[-1]
+    lines = result.main_block["linhas"]
+    assert "MONTH(f.Data) AS comparison_month" in sql
+    assert "GROUP BY MONTH(f.Data)" in sql
+    assert [line["comparison_month"] for line in lines] == [
+        "05/2026",
+        "06/2026",
+        "07/2026",
+        "Total do período",
+    ]
+    assert lines[1]["fat_rs_atual"] == 0.0
+    assert lines[1]["fat_rs_anterior"] == 0.0
+    assert lines[-1]["fat_rs_atual"] == 220.0
+    assert lines[-1]["fat_rs_anterior"] == 200.0
+    assert lines[-1]["fat_rs_variacao_abs"] == 20.0
+    assert lines[-1]["fat_rs_variacao_pct"] == 10.0
 
 
 # -------------------------------------------------------- preço médio por kg

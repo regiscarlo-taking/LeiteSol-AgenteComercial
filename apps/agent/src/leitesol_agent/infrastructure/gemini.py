@@ -7,21 +7,30 @@ código valida o que voltou.
 
 import json
 import re
+from calendar import monthrange
 from datetime import date
 from typing import Any
 
 import httpx
 
-from leitesol_agent.application.where_filters import filter_fields_for_prompt
 from leitesol_agent.application.operations.average_price_per_kg import (
     INTENT_ID as AVERAGE_PRICE_PER_KG_INTENT,
 )
+from leitesol_agent.application.where_filters import filter_fields_for_prompt
 from leitesol_agent.domain.models import Catalog, Operation
 from leitesol_agent.domain.usage import UsageMeter
 from leitesol_agent.infrastructure.view_knowledge import retrieve_view_context
 
 _MONTH_WINDOW = re.compile(
-    r"\b(?:[úu]ltim[oa]s?\s+)?((?:\d+\s*(?:,|e|ou|a)\s*)*\d+)\s+mes(?:es)?\b",
+    r"\b(?:[úu]ltim[oa]s?\s+)?((?:\d+\s*(?:,|e|ou|a)\s*)*\d+)\s+mes(?:es)?\b"
+    r"|\b((?:\d+\s*(?:,|e|ou|a)\s*)*\d+)\s+[úu]ltim[oa]s?\s+mes(?:es)?\b",
+    re.IGNORECASE,
+)
+_EXPLICIT_MONTH_COMPARISON = re.compile(
+    r"\bm(?:ê|e)s(?:es)?\s+(?P<months_current>\d{1,2}(?:\s*(?:,|e|ou)\s*\d{1,2})*)"
+    r"\s+de\s+(?P<year_current>20\d{2})\b.{0,100}?"
+    r"\bm(?:ê|e)s(?:es)?\s+(?P<months_previous>\d{1,2}(?:\s*(?:,|e|ou)\s*\d{1,2})*)"
+    r"\s+de\s+(?P<year_previous>20\d{2})\b",
     re.IGNORECASE,
 )
 _REGION_LEVEL = re.compile(r"\bregi(?:ão|ao|ões|oes)\b", re.IGNORECASE)
@@ -42,17 +51,51 @@ _CUSTOMER_OR_COMPARISON = re.compile(
 
 
 def _requested_month_window(question: str) -> int | list[int] | None:
-    matches = _MONTH_WINDOW.findall(question)
+    matches = _MONTH_WINDOW.finditer(question)
     values = list(
         dict.fromkeys(
             int(number)
             for match in matches
-            for number in re.findall(r"\d+", match)
+            for phrase in match.groups()
+            if phrase
+            for number in re.findall(r"\d+", phrase)
         )
     )
     if len(values) == 1:
         return values[0]
     return values or None
+
+
+def _explicit_month_comparison(question: str) -> tuple[date, date] | None:
+    match = _EXPLICIT_MONTH_COMPARISON.search(question)
+    if match is None:
+        return None
+
+    months_current = [
+        int(month) for month in re.findall(r"\d+", match.group("months_current"))
+    ]
+    months_previous = [
+        int(month) for month in re.findall(r"\d+", match.group("months_previous"))
+    ]
+    current_year = int(match.group("year_current"))
+    previous_year = int(match.group("year_previous"))
+    if (
+        not months_current
+        or months_current != months_previous
+        or previous_year != current_year - 1
+        or any(month < 1 or month > 12 for month in months_current)
+        or months_current != list(range(min(months_current), max(months_current) + 1))
+    ):
+        return None
+
+    return (
+        date(current_year, min(months_current), 1),
+        date(
+            current_year,
+            max(months_current),
+            monthrange(current_year, max(months_current))[1],
+        ),
+    )
 
 
 def _requested_geographic_level(question: str) -> str | None:
@@ -175,10 +218,28 @@ class GeminiLanguageModel:
             f"{self._question_block(question)}"
         )
         result = self._generate_json(prompt)
+        explicit_month_comparison = (
+            _explicit_month_comparison(question)
+            if operation.operation_id == "OP12"
+            else None
+        )
+        if explicit_month_comparison is not None:
+            start, end = explicit_month_comparison
+            result["periodo_inicio"] = start.isoformat()
+            result["periodo_fim"] = end.isoformat()
+            result["comparar_mes_a_mes"] = True
         requested_window = _requested_month_window(question)
         if operation.operation_id == "OP17":
             if requested_window is not None:
                 result["janela_meses"] = requested_window
+        elif (
+            operation.operation_id == "OP12"
+            and explicit_month_comparison is None
+            and isinstance(requested_window, int)
+        ):
+            result["janela_meses"] = requested_window
+            result.pop("periodo_inicio", None)
+            result.pop("periodo_fim", None)
         elif operation.operation_id in {
             "OP14",
             "APP_SALES_BREAKDOWN",
@@ -212,7 +273,9 @@ class GeminiLanguageModel:
             "para um gestor de vendas. Regras: use SÓ os números do JSON, sem recalcular nem "
             "arredondar de outro jeito; não invente causa nem motivo para alta ou queda; diga o "
             "recorte aplicado (ex.: 'dentro da sua carteira'); mencione os avisos que afetam a "
-            "leitura; de 3 a 6 frases, sem markdown. Responda só JSON com a chave narrativa.\n"
+            "leitura; se a tabela tiver linhas por competência e um total do período, reporte "
+            "a comparação mensal e o total; de 3 a 6 frases, sem markdown. Responda só JSON "
+            "com a chave narrativa.\n"
             f"Operação: {operation.business_intent}\n"
             f"Resultado: {json.dumps(data, ensure_ascii=False, default=str)[:12000]}\n\n"
             f"{self._question_block(question)}"
