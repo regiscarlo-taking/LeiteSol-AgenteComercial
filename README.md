@@ -288,7 +288,8 @@ já implementadas no agente:
 - Essas consultas continuam sujeitas à alçada do usuário e aos filtros
   estruturados. O filtro geográfico usa o cadastro do cliente, não `UFVenda`.
   Elas são totais absolutos, não a comparação histórica regional descrita no
-  catálogo OP16; essa comparação ainda não tem executor nesta versão.
+  catálogo OP16 ("quais regiões estão acima ou abaixo da média?"), que compara
+  cada região com a própria média de 3, 6 e 12 meses e com o ano anterior.
 - **Evolução mensal:** “Mostre a evolução do faturamento dos últimos 12 meses.” Use
   `Competência` no eixo X e FAT R$ ou FAT KG como série; `auto` escolhe linha.
 - **Comparação anual:** “Compare o faturamento de janeiro a junho de 2026 com o

@@ -1,8 +1,10 @@
 # Roteiro de perguntas de teste do agente
 
 Bateria para rodar contra o agente na tela (ou no `POST /chat/query`), combinada
-na interna de 14-10. Cobre as **seis operações com executor** (OP01, OP11, OP12,
-OP13, OP17, OP18) e os desvios que o catálogo manda tratar. Para cada pergunta,
+na interna de 14-10. As seções 1 a 7 cobrem as operações com executor até 14-10
+(OP01, OP11, OP12, OP13, OP17, OP18); a seção 8 cobre as 15 que entraram em 19-10
+(OP02–OP10, OP15, OP16, OP19–OP22), fechando as 22 perguntas da Fase 1. Inclui os
+desvios que o catálogo manda tratar. Para cada pergunta,
 a coluna "conferir" diz o que a resposta precisa mostrar. Se aparecer outra
 coisa, o problema está na classificação, nos parâmetros ou na operação.
 
@@ -111,16 +113,32 @@ A resposta não pode chamar o cliente de "novo" nem de "recuperado"; essa leitur
 | 7.7 | Qual o faturamento do vendedor X? *(X fora da carteira do gestor logado)* | respondida (vazia) ou sem_alcada | Nunca o número do vendedor de fora. |
 | 7.8 | Qual a previsão do tempo amanhã? | fora_de_escopo | — |
 
-## 8. Operações reconhecidas mas sem executor
+## 8. Operações que entraram em 19-10
 
-O classificador reconhece outras perguntas do glossário (curva ABC, frequência de compra,
-churn de produto, etc.). Elas respondem **"essa análise ainda não está disponível nesta
-versão do agente"**, sem número, hoje com status **`erro`** (`answer_question.py`). Vale
-decidir se esse caso deveria ter status próprio: para quem lê o log, `erro` mistura
-"não implementado" com falha técnica. Exemplos:
+Último mês fechado de referência: jul/26 (D-A64). Onde a regra ainda não foi fechada
+por completo com a área comercial, a resposta **precisa** trazer o aviso
+`REGRA_EM_ABERTO` ("Regra ainda não fechada por completo… resultado informativo").
 
-- Qual a curva ABC dos clientes em 2026?
-- Qual a frequência de compra do cliente 17351?
+| # | Pergunta | Op | Status | Conferir |
+| --- | --- | --- | --- | --- |
+| 8.1 | Quais clientes compraram em julho de 2026 abaixo da média dos 6 meses anteriores? | OP02 | respondida | Média = soma jan–jun / 6 (mês sem compra vale zero); R$ e KG separados; média zero vai para o bloco de exceções. |
+| 8.2 | Quais clientes compraram em julho comparados com a média? | OP02 | esclarecimento | Tipo de comparação (abaixo/igual/acima) obrigatório. |
+| 8.3 | Qual vendedor não positivou a rede 534 em julho de 2026? | OP03 | respondida | Uma linha por agrupamento × vendedor ATUAL, com todas as UFs; cliente sem vendedor em exceção. |
+| 8.4 | Vou visitar o cliente 17351: itens que cresceram, caíram ou ficaram estáveis em KG. | OP04 | respondida | Jul/26 contra a média de jan–jun; aviso `REGRA_EM_ABERTO` (tolerância). |
+| 8.5 | Qual a curva ABC dos clientes de DF em junho de 2026, em KG? | OP05 | respondida | Bate com o Power BI de 13-10: Gran Coffee e quem cruza 80% em A; Rio Brasa (negativo) em C. |
+| 8.6 | Qual a curva ABC dos produtos do cliente 17351? | OP05 | respondida | Curva dos produtos dele em 12 meses fechados (ago/25–jul/26). |
+| 8.7 | Qual a frequência de compra do Assaí? | OP06 | respondida | 12 meses fechados; faixa Mensal/Bimestral/Trimestral/Semestral/Ocasional; recência pela fato, não pelo cadastro. |
+| 8.8 | O ticket médio do cliente 01735101 está em queda no 1º semestre de 2026? | OP07 | respondida | R$/kg somando antes de dividir; jan–jun/26 contra jul–dez/25; tendência interna separada; aviso `REGRA_EM_ABERTO` (±2%). |
+| 8.9 | Qual a sazonalidade da rede 534? | OP08 | respondida | Tabela jan–dez em ordem de calendário; "perfil descritivo", nunca sazonalidade consolidada; `REGRA_EM_ABERTO`. |
+| 8.10 | Quais produtos o Carrefour parou de comprar entre abril e junho de 2026? | OP09 | respondida | Item 651 deve aparecer (caso de 13-10); período anterior = jan–mar/26. |
+| 8.11 | Itens que o cliente 17351 comprava há 3 meses e sumiram agora — e por quê? | OP10 | respondida | M = mês vigente (parcial, com aviso) contra uma competência só (M-3); **sem motivo** — aviso de Fase 2/3. |
+| 8.12 | Ranking dos vendedores com a evolução mês a mês em 2026. | OP15 | respondida | Uma coluna por mês, total, ano anterior e variação; visão declarada; vendedor ATUAL. |
+| 8.13 | Quais regiões estão acima ou abaixo da média? | OP16 | respondida | Cada UF contra a própria média de 3/6/12 meses e o mesmo mês do ano anterior; UF sem venda em exceção; `REGRA_EM_ABERTO`. |
+| 8.14 | Quais clientes têm potencial de crescimento nos últimos 12 meses? | OP19 | respondida | "Candidato heurístico", por rede; frequência > 70%, mix > 1, KG do 2º semestre maior; `REGRA_EM_ABERTO`. |
+| 8.15 | Quais canais estão vendendo mais hoje e quais estão em queda? | OP20 | respondida | Segmento como canal; mês vigente contra o mesmo mês do ano anterior + acumulado fechado; ND/OUTRO sinalizados; `REGRA_EM_ABERTO` (canal). |
+| 8.16 | Quais produtos estão com giro baixo? | OP21 | respondida | Queda em KG no mês E no acumulado; queda só em um = resultado misto (exceção); `REGRA_EM_ABERTO`. |
+| 8.17 | Clientes do varejo de SP que compram leite em pó e não compram queijos, nos últimos 2 anos. | OP22 | respondida | Top 20 pistas; pares compradores do mesmo segmento/UF; sem "20% → 60%"; `REGRA_EM_ABERTO`. |
+| 8.18 | Clientes que compram 20% do portfólio e têm potencial para 60%. | OP22 | esclarecimento | Pede segmento, UF e o par de grupamentos; a meta percentual não é calculada. |
 
 ## Como registrar
 

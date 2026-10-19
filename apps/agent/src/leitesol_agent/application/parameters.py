@@ -100,7 +100,12 @@ def validate_parameters(operation: Operation, raw: dict[str, Any]) -> ValidatedP
             else:
                 continue
 
-        if parameter.kind == "date":
+        if parameter.name == "janelas":
+            # OP16: subconjunto "3|6|12". O catálogo antigo declarava enum com
+            # domínio "3|6|12 (subconjunto)", que nunca validava o próprio
+            # default; a operação interpreta o texto (parse_windows).
+            result.values[parameter.name] = str(value)
+        elif parameter.kind == "date":
             parsed = _parse_date(value)
             if parsed is None:
                 result.questions.append(_missing_question(parameter))
