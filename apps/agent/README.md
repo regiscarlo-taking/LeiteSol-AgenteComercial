@@ -80,6 +80,18 @@ As 22 perguntas da Fase 1 têm executor (OP01–OP22). As 15 que entraram em 19-
 - O motivo da ausência de itens (OP10) e a cobertura "20% → 60%" (OP22) ficam
   fora: o primeiro é Fase 2/3 do glossário; o segundo foi descartado em 22-07.
 
+## Nome de cliente ou rede
+
+Antes da operação, `application/client_names.py` resolve o nome digitado em
+`cliente_rede`, `escopo_cliente` ou `cliente_loja` (texto com letra; código e CNPJ
+seguem direto) para UMA rede, dentro da carteira do usuário: descrição exata do
+grupo de venda, depois nome exato da rede (`RedeNome`), depois trecho do nome na
+rede, razão social ou nome fantasia. Uma rede → o parâmetro vira `rede:<código>`
+(o `client_filter` filtra só por `c.Rede`) e a resposta traz o aviso
+`CLIENTE_RESOLVIDO`; várias → pergunta qual, listando as opções; nenhuma → pede
+outra identificação. Até 19-10 só o nome exato do grupo funcionava, e clientes
+sem grupo de venda (Granfood, Megatop) não eram encontrados pelo nome.
+
 ## Nova operação
 
 1. Cadastrar a operação e os parâmetros no catálogo (`AGT_OPERACAO`, `AGT_OPERACAO_PARAMETRO`).

@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Protocol
 
+from leitesol_agent.application.client_names import resolve_client_names
 from leitesol_agent.application.operations.base import OperationHandler, SqlFetcher
 from leitesol_agent.application.parameters import validate_parameters
 from leitesol_agent.application.where_filters import WhereFilter
@@ -152,6 +153,19 @@ class AnswerQuestion:
                 question_to_user=" ".join(validated.questions),
             )
 
+        # 4b. Nome de cliente/rede -> código da rede, dentro da alçada. Nome
+        # ambíguo ou desconhecido vira pergunta, nunca uma escolha silenciosa.
+        names = resolve_client_names(self._fetcher, validated.values, scope)
+        if names.question:
+            return AgentResponse(
+                correlation_id=correlation_id,
+                status=ResponseStatus.CLARIFICATION,
+                operation=operation,
+                parameters=_serializable(validated.values),
+                scope=scope,
+                question_to_user=names.question,
+            )
+
         # 5. Execução (única etapa que produz número).
         result = handler.run(self._fetcher, validated.values, scope)
         if result.question_to_user:
@@ -165,7 +179,11 @@ class AnswerQuestion:
             )
 
         # 6. Ressalvas: vêm do catálogo e da execução, não da LLM.
-        notices = [Notice("RT17", "regra_transversal", MONTHLY_GRAIN_TEXT), *result.notices]
+        notices = [
+            Notice("RT17", "regra_transversal", MONTHLY_GRAIN_TEXT),
+            *names.notices,
+            *result.notices,
+        ]
         if operation.alerts:
             notices.append(Notice(operation.operation_id, "operacao", operation.alerts))
 

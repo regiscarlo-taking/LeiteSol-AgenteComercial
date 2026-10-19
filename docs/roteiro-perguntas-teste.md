@@ -139,6 +139,9 @@ por completo com a área comercial, a resposta **precisa** trazer o aviso
 | 8.16 | Quais produtos estão com giro baixo? | OP21 | respondida | Queda em KG no mês E no acumulado; queda só em um = resultado misto (exceção); `REGRA_EM_ABERTO`. |
 | 8.17 | Clientes do varejo de SP que compram leite em pó e não compram queijos, nos últimos 2 anos. | OP22 | respondida | Top 20 pistas; pares compradores do mesmo segmento/UF; sem "20% → 60%"; `REGRA_EM_ABERTO`. |
 | 8.18 | Clientes que compram 20% do portfólio e têm potencial para 60%. | OP22 | esclarecimento | Pede segmento, UF e o par de grupamentos; a meta percentual não é calculada. |
+| 8.19 | Qual a frequência de compra da Megatop? | OP06 | respondida | Cliente sem grupo de venda achado por trecho do nome: aviso `CLIENTE_RESOLVIDO` com a rede 55032745. |
+| 8.20 | Qual a frequência de compra do G Barbosa? | OP06 | esclarecimento | O trecho cai em mais de uma rede (000036 G BARBOSA /CENCOSUD e G BARBOSA -SERGIPE): lista as opções e pergunta qual. |
+| 8.21 | Qual a frequência de compra do Assaí? | OP06 | respondida | Nome exato do grupo de venda: rede 000487 (não mistura ASSAI BARCELONA, 000061). |
 
 ## Como registrar
 
