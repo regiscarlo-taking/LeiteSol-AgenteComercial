@@ -47,8 +47,10 @@ OP12 = Operation(
         Parameter("situacao", "enum", False, "crescimento|queda|igual|todas", "todas", "Direcao"),
     ),
 )
-OP05 = Operation("OP05", "SK04", "classificar_curva_abc_cliente", "abc", "Curva ABC", None)
-CATALOG = Catalog(operations=(OP05, OP12), transversal_rules={})
+# Operação reconhecida pelo catálogo mas sem executor: desde 19-10 as 22 da Fase 1
+# têm executor, então o caso usa uma operação fora delas (OP23 não foi discutida).
+OP23 = Operation("OP23", "SK04", "operacao_sem_executor", "sem_executor", "Sem executor", None)
+CATALOG = Catalog(operations=(OP12, OP23), transversal_rules={})
 SELLER_SCOPE = Scope(sees_everything=False, sellers=frozenset({"000123", "000456"}), teams=frozenset({"997"}))
 
 
@@ -194,10 +196,10 @@ def test_unknown_intent_is_out_of_scope() -> None:
 
 
 def test_operation_without_handler_is_declared_unavailable() -> None:
-    response = answer(FakeLLM("classificar_curva_abc_cliente"), SELLER_SCOPE)
+    response = answer(FakeLLM("operacao_sem_executor"), SELLER_SCOPE)
 
     assert response.status is ResponseStatus.ERROR
-    assert response.operation is OP05
+    assert response.operation is OP23
 
 
 def test_missing_parameter_becomes_clarification() -> None:

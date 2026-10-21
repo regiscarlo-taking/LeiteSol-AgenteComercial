@@ -131,7 +131,14 @@ def _in(column: str, values: list[str]) -> str:
     return f"{column} IN ({', '.join('?' for _ in values)})"
 
 
+# Nome de cliente/rede já resolvido para a rede (application/client_names.py):
+# filtra SÓ pela rede, sem cair no código de cliente de mesmo número.
+REDE_PREFIX = "rede:"
+
+
 def client_filter(text: str) -> tuple[str, list[Any]]:
+    if text.startswith(REDE_PREFIX):
+        return "c.Rede = ?", [text[len(REDE_PREFIX):]]
     digits = "".join(char for char in text if char.isdigit())
     cnpj = "REPLACE(REPLACE(REPLACE(c.CNPJ, '.', ''), '/', ''), '-', '')"
     if len(digits) == 14:
@@ -226,7 +233,10 @@ def universe_where(
     if values.get("cliente_rede"):
         clause, params = client_filter(values["cliente_rede"])
         where.add(clause, *params)
-    if values.get("cliente_loja"):
+    if values.get("cliente_loja", "").startswith(REDE_PREFIX):
+        clause, params = client_filter(values["cliente_loja"])
+        where.add(clause, *params)
+    elif values.get("cliente_loja"):
         value = values["cliente_loja"].strip()
         client_ids = client_id_candidates(value)
         client_codes = padded(value, CLIENT_CODE_WIDTH)

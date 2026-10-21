@@ -56,15 +56,51 @@ nem abre conexão: recebe tudo pelo construtor de `AnswerQuestion`.
   `IA_COMUM.ESTADOS.REGIAO` pela UF cadastral. Produtos são Top 20 e produto
   por UF é Top 5 por UF, salvo limite explicitamente solicitado.
 - Totais absolutos por região não substituem a comparação regional histórica
-  OP16 (ainda sem executor); usam a UF cadastral (`c.UF`), não a UF da
-  transação (`f.UFVenda`).
+  OP16, que compara cada região com a própria média; usam a UF cadastral
+  (`c.UF`), não a UF da transação (`f.UFVenda`).
+
+## Cobertura do glossário (19-10)
+
+As 22 perguntas da Fase 1 têm executor (OP01–OP22). As 15 que entraram em 19-10
+(OP02–OP10, OP15, OP16, OP19–OP22) compartilham `application/operations/analytics.py`:
+
+- **Cálculo puro** (`abc_curve`, `frequency_class`, `classify_ticket`,
+  `seasonal_profile`, `growth_criteria`, `turnover_status`, `product_trend_status`…):
+  recebe números e devolve números ou rótulos, sem banco. O SQL de cada operação
+  só agrega.
+- **Série mensal genérica** (`monthly_query` + `pivot`): FAT R$ e FAT KG por chave
+  e competência no universo comum, com mês sem movimento valendo zero.
+- **Regra não fechada com a área comercial:** a operação anexa
+  `open_rule_notice(...)`, aviso `REGRA_EM_ABERTO` ("Regra ainda não fechada por
+  completo… O resultado é informativo até a homologação"). Hoje: tolerância de
+  estabilidade (OP04, OP16), ±2% e metades do ticket (OP07), índice sazonal sem
+  validação com casos reais (OP08), fórmula de tendência (OP19), canal = segmento
+  (OP20), medida de giro (OP21) e mapa de complementares (OP22). Valor líquido
+  negativo fora da curva ABC recebe `VALOR_NEGATIVO` (P-NEGATIVO).
+- O motivo da ausência de itens (OP10) e a cobertura "20% → 60%" (OP22) ficam
+  fora: o primeiro é Fase 2/3 do glossário; o segundo foi descartado em 22-07.
+
+## Nome de cliente ou rede
+
+Antes da operação, `application/client_names.py` resolve o nome digitado em
+`cliente_rede`, `escopo_cliente` ou `cliente_loja` (texto com letra; código e CNPJ
+seguem direto) para UMA rede, dentro da carteira do usuário: descrição exata do
+grupo de venda, depois nome exato da rede (`RedeNome`), depois trecho do nome na
+rede, razão social ou nome fantasia. Uma rede → o parâmetro vira `rede:<código>`
+(o `client_filter` filtra só por `c.Rede`) e a resposta traz o aviso
+`CLIENTE_RESOLVIDO`; várias → pergunta qual, listando as opções; nenhuma → pede
+outra identificação. Até 19-10 só o nome exato do grupo funcionava, e clientes
+sem grupo de venda (Granfood, Megatop) não eram encontrados pelo nome.
 
 ## Nova operação
 
 1. Cadastrar a operação e os parâmetros no catálogo (`AGT_OPERACAO`, `AGT_OPERACAO_PARAMETRO`).
-2. Criar a classe em `application/operations/`, reaproveitando `common.py`.
+2. Criar a classe em `application/operations/`, reaproveitando `common.py` e
+   `analytics.py`; a regra de classificação vai como função pura em `analytics.py`.
 3. Registrá-la em `application/operations/__init__.py`.
-4. Cobrir com teste em `tests/`.
+4. Cobrir com teste em `tests/`: funções puras em `test_analytics.py`, operação
+   em `test_operations_fase1.py` (ou arquivo próprio), com funções de teste soltas
+   e o banco falso `fake_fetcher` do `conftest.py`, que confere `?` × parâmetros.
 
 ## Testes
 
