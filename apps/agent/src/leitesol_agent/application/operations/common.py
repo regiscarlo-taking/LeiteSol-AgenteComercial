@@ -56,7 +56,15 @@ OPEN_MONTHS_SQL = """
 PRODUCT_TERMS_SQL = """
     SELECT DISTINCT TermoNormalizado
     FROM [IA_COMERCIAL].[vw_produto_termo]
-    WHERE TermoNormalizado IN ({placeholders})
+"""
+
+# Sinônimos de produto (RT35): só as linhas do glossário que apontam para o
+# produto. LEFT em vez de LIKE porque '[' é curinga no LIKE do T-SQL.
+PRODUCT_SYNONYMS_SQL = """
+    SELECT termo, sinonimos
+    FROM [IA_COMERCIAL].[AGT_GLOSSARIO]
+    WHERE LEFT(objeto_alvo, 12) = 'Dim Produto['
+       OR objeto_alvo = 'IA_COMERCIAL.vw_produto_termo'
 """
 
 PRODUCT_TREE_SQL = """
@@ -176,22 +184,67 @@ def product_filter(fetcher: SqlFetcher, text: str) -> tuple[str, list[Any]] | No
             node,
         ]
 
-    terms = sorted({term for term in node.split() if term not in STOPWORDS})
+    known = {row["TermoNormalizado"] for row in fetcher.fetch(PRODUCT_TERMS_SQL)}
+    phrases = {term: term for term in known}
+    terms = match_phrases(node, phrases)
+    if terms is None:
+        # Palavra fora da lista: tenta o sinônimo do glossário (bolsa -> granel).
+        phrases.update(product_synonyms(fetcher, known))
+        terms = match_phrases(node, phrases)
     if not terms:
         return None
     placeholders = ", ".join("?" for _ in terms)
-    known = {
-        row["TermoNormalizado"]
-        for row in fetcher.fetch(PRODUCT_TERMS_SQL.format(placeholders=placeholders), tuple(terms))
-    }
-    if set(terms) - known:
-        return None
     return (
         "p.ProdutoId IN (SELECT t.ProdutoId FROM [IA_COMERCIAL].[vw_produto_termo] t "
         f"WHERE t.TermoNormalizado IN ({placeholders}) "
         "GROUP BY t.ProdutoId HAVING COUNT(DISTINCT t.TermoNormalizado) = ?)",
         [*terms, len(terms)],
     )
+
+
+def product_synonyms(fetcher: SqlFetcher, known: set[str]) -> dict[str, str]:
+    """Sinônimo -> termo da lista, a partir do AGT_GLOSSARIO.
+
+    Só valem as linhas cujo termo principal existe na vw_produto_termo (granel,
+    almofada, pack...). Um sinônimo que já é termo da lista guarda o próprio
+    sentido, e um sinônimo que leva a dois termos diferentes fica de fora - o
+    agente pergunta em vez de escolher.
+    """
+    targets: dict[str, set[str]] = {}
+    for row in fetcher.fetch(PRODUCT_SYNONYMS_SQL):
+        canonical = normalize_term(row["termo"] or "")
+        if canonical not in known:
+            continue
+        for synonym in (row["sinonimos"] or "").split(";"):
+            phrase = normalize_term(synonym)
+            if phrase and phrase not in known:
+                targets.setdefault(phrase, set()).add(canonical)
+    return {phrase: next(iter(found)) for phrase, found in targets.items() if len(found) == 1}
+
+
+def match_phrases(node: str, phrases: dict[str, str]) -> list[str] | None:
+    """Cobre o texto com frases conhecidas, da mais longa para a mais curta.
+
+    Devolve os termos da lista (sem repetição) ou None se sobrar palavra que
+    não é frase conhecida nem palavra de ligação.
+    """
+    words = node.split()
+    longest = max((len(phrase.split()) for phrase in phrases), default=0)
+    found: list[str] = []
+    start = 0
+    while start < len(words):
+        for size in range(min(longest, len(words) - start), 0, -1):
+            term = phrases.get(" ".join(words[start : start + size]))
+            if term:
+                if term not in found:
+                    found.append(term)
+                start += size
+                break
+        else:
+            if words[start] not in STOPWORDS:
+                return None
+            start += 1
+    return sorted(found)
 
 
 def product_question(text: str) -> str:
