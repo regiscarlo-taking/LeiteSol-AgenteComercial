@@ -1,3 +1,15 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+const localEnvFile = [
+  resolve(process.cwd(), ".env"),
+  resolve(process.cwd(), "..", "..", ".env"),
+].find(existsSync);
+
+if (localEnvFile) {
+  process.loadEnvFile(localEnvFile);
+}
+
 const parsePort = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;

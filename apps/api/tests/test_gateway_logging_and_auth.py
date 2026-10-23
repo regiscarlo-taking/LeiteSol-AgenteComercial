@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -50,6 +51,88 @@ def test_gateway_log_writes_all_severities_to_one_blob() -> None:
         "error",
     ]
     assert all("body" not in line for _, line in store.lines)
+
+
+def test_gateway_blob_write_logs_success_with_trace_and_blob_name(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="leitesol.api.gateway")
+    store = FakeStore()
+    record = gateway_log()
+
+    record_gateway_request(
+        record,
+        Settings(gateway_log_to_blob=True),
+        store,
+    )
+
+    blob_events = [
+        json.loads(item.message.removeprefix("gateway_log_blob_write "))
+        for item in caplog.records
+        if item.message.startswith("gateway_log_blob_write ")
+    ]
+    assert len(blob_events) == 1
+    assert blob_events[0]["event"] == "gateway_log_blob_write"
+    assert blob_events[0]["trace_id"] == record.trace_id
+    assert blob_events[0]["result"] == "written"
+    assert blob_events[0]["blob"] == "gateway/logs.jsonl"
+    assert blob_events[0]["duration_ms"] >= 0
+
+
+def test_gateway_blob_write_logs_azure_error_diagnostics_without_raising(caplog) -> None:
+    class StorageFailure(RuntimeError):
+        error_code = "AuthorizationPermissionMismatch"
+        status_code = 403
+        response = type(
+            "StorageResponse",
+            (),
+            {"headers": {"x-ms-request-id": "azure-request-123"}},
+        )()
+
+    class FailingStore(FakeStore):
+        def append_line(self, name: str, line: str) -> None:
+            raise StorageFailure("do not log this raw response body")
+
+    record = gateway_log()
+
+    record_gateway_request(
+        record,
+        Settings(gateway_log_to_blob=True),
+        FailingStore(),
+    )
+
+    blob_events = [
+        json.loads(item.message.removeprefix("gateway_log_blob_write "))
+        for item in caplog.records
+        if item.message.startswith("gateway_log_blob_write ")
+    ]
+    assert blob_events == [
+        {
+            "event": "gateway_log_blob_write",
+            "trace_id": record.trace_id,
+            "result": "failed",
+            "error_type": "StorageFailure",
+            "error_code": "AuthorizationPermissionMismatch",
+            "status_code": 403,
+            "storage_request_id": "azure-request-123",
+            "duration_ms": blob_events[0]["duration_ms"],
+        }
+    ]
+    assert blob_events[0]["duration_ms"] >= 0
+    assert "do not log this raw response body" not in caplog.text
+
+
+def test_gateway_blob_write_logs_when_storage_persistence_is_disabled(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="leitesol.api.gateway")
+    record_gateway_request(gateway_log(), Settings(gateway_log_to_blob=False))
+
+    blob_events = [
+        json.loads(item.message.removeprefix("gateway_log_blob_write "))
+        for item in caplog.records
+        if item.message.startswith("gateway_log_blob_write ")
+    ]
+    assert len(blob_events) == 1
+    assert blob_events[0]["event"] == "gateway_log_blob_write"
+    assert blob_events[0]["result"] == "skipped"
+    assert blob_events[0]["reason"] == "blob_logging_disabled"
 
 
 def test_gateway_log_ingestion_requires_shared_api_key(monkeypatch) -> None:

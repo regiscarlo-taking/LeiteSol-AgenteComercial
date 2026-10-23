@@ -1,7 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 
-import { persistGatewayLog } from "../services/backend-client.js";
+import {
+  BackendRequestError,
+  persistGatewayLog,
+} from "../services/backend-client.js";
 import { clearAuthCookies } from "./session.js";
 
 export const loggingMiddleware = (
@@ -48,15 +51,43 @@ export const loggingMiddleware = (
     const logMethod =
       severity === "error" ? console.error : severity === "warning" ? console.warn : console.info;
     logMethod(JSON.stringify(record));
-    void persistGatewayLog(record).catch(() => {
-      console.warn(
-        JSON.stringify({
+    const forwardingStartedAt = performance.now();
+    void persistGatewayLog(record)
+      .then((result) => {
+        const skipped = result === "skipped_missing_api_key";
+        const event = {
+          event: "gateway_log_forward",
           traceId,
-          severity: "warning",
-          message: "Gateway log could not be forwarded to the API.",
-        }),
-      );
-    });
+          severity: skipped ? "warning" : "info",
+          result: skipped ? "skipped" : "forwarded",
+          reason: skipped ? "backend_api_key_missing" : undefined,
+          durationMs: Number(
+            (performance.now() - forwardingStartedAt).toFixed(2),
+          ),
+        };
+        (skipped ? console.warn : console.info)(JSON.stringify(event));
+      })
+      .catch((error: unknown) => {
+        const statusCode =
+          error instanceof BackendRequestError ? error.statusCode : undefined;
+        const severity =
+          statusCode !== undefined && statusCode < 500 ? "warning" : "error";
+        const event = {
+          event: "gateway_log_forward",
+          traceId,
+          severity,
+          result: "failed",
+          statusCode,
+          errorType:
+            error instanceof Error ? error.constructor.name : "UnknownError",
+          durationMs: Number(
+            (performance.now() - forwardingStartedAt).toFixed(2),
+          ),
+        };
+        (severity === "error" ? console.error : console.warn)(
+          JSON.stringify(event),
+        );
+      });
   });
 
   next();

@@ -103,13 +103,22 @@ Para persistir esses registros no Blob privado existente, configure o mesmo
 valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
 usado pelo Docker Compose (ou forneça as duas variáveis ao iniciar os serviços
 diretamente), configure conta/container de Storage e defina
-`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. Todos os níveis e, quando
+`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. Ao executar o gateway diretamente
+com Node, ele carrega o `.env` da raiz; o endereço local padrão da API é
+`http://localhost:5000` (`BACKEND_URL`). No Docker Compose, o gateway usa o
+endereço interno `http://api:5000`. Todos os níveis e, quando
 `LEITESOL_API_USAGE_LOG_TO_BLOB=true`, os registros de consumo da LLM são
 anexados ao mesmo append blob `gateway/logs.jsonl`; cada linha JSONL identifica
 severidade e tipo do evento, sem criar blobs por data ou categoria. O blob é
 criado na primeira gravação se ainda não existir. Sem a gravação no Blob, os
 logs estruturados continuam no console/fluxo de logs do gateway e da API. Falhas de
-persistência são registradas como warning e não interrompem as requisições.
+persistência são registradas no terminal e não interrompem as requisições. Para
+diagnóstico, procure os eventos `gateway_log_forward` no gateway e
+`gateway_log_blob_write` na API, usando `traceId`/`trace_id` para correlacioná-los.
+Os eventos mostram se o encaminhamento foi ignorado, falhou ou chegou à API e
+se a gravação no Blob foi concluída; falhas incluem tipo/código HTTP do Azure e
+request ID quando disponíveis, sem imprimir o conteúdo bruto da resposta nem
+credenciais.
 
 Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
 máxima do token nas rotas protegidas; o gateway mantém o access token em cookie

@@ -177,9 +177,9 @@ export const validateBackendSession = async (
 
 export const persistGatewayLog = async (
   record: GatewayLogRecord,
-): Promise<void> => {
+): Promise<"forwarded" | "skipped_missing_api_key"> => {
   if (!env.backendApiKey) {
-    return;
+    return "skipped_missing_api_key";
   }
 
   const response = await requestBackend(`${env.backendUrl}/internal/gateway-logs`, {
@@ -198,6 +198,7 @@ export const persistGatewayLog = async (
       response.status,
     );
   }
+  return "forwarded";
 };
 
 export const fetchBackendHealth = async (
