@@ -93,8 +93,15 @@ const uvicornArgs = [
   ...(options.reload ? ["--reload"] : []),
 ];
 
-if (hasCommand("uv")) {
-  const child = run("uv", [
+const uvCommand = hasCommand("uv")
+  ? { command: "uv", prefixArgs: [] }
+  : hasCommand("python", ["-m", "uv", "--version"])
+    ? { command: "python", prefixArgs: ["-m", "uv"] }
+    : null;
+
+if (uvCommand) {
+  const child = run(uvCommand.command, [
+    ...uvCommand.prefixArgs,
     "run",
     "--package",
     "leitesol-api",
@@ -120,8 +127,8 @@ if (hasCommand("uv")) {
 } else {
   console.error("Nao foi possivel iniciar a API.");
   console.error("Opcoes para destravar:");
-  console.error("1. Instale o uv e execute `npm run dev:api` novamente.");
+  console.error("1. Instale o uv com `python -m pip install --user uv` e execute `npm run dev` novamente.");
   console.error("2. Ou prepare um ambiente Python local em `apps/api/.venv` com `uvicorn` instalado.");
-  console.error("3. Ou rode apenas frontend + gateway com `npm run dev`.");
+  console.error("3. O stack completo é `npm run dev` (API, web e gateway); o agente é carregado pela API.");
   process.exit(1);
 }

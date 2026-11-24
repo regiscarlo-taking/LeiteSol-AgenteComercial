@@ -34,10 +34,21 @@ npm install
 npm run dev
 ```
 
-Esse comando sobe:
+Esse comando sobe a API, o frontend e o gateway:
 
 - frontend Vite em `http://localhost:3000`
 - gateway em `http://localhost:3001`
+- API FastAPI em `http://localhost:5000`
+
+O agente é uma biblioteca Python carregada pela API, não um servidor separado.
+
+Para desenvolver somente o frontend e o gateway, sem iniciar a API:
+
+```bash
+npm run dev:frontend
+```
+
+Nesse modo, recursos que dependem do backend, como login e chat, não estarão disponíveis.
 
 Para subir a API separadamente em desenvolvimento:
 
