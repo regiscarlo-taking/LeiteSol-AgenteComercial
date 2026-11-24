@@ -97,12 +97,14 @@ pnpm dev:agent
   - `GET /api/health` consulta a API
   - `GET /health/live` responde liveness do gateway
 
-## Logs do gateway e duração da sessão
+## Logs dos serviços e duração da sessão
 
-Cada requisição recebida pelo gateway ganha um `X-Request-ID` novo. O gateway
-propaga o identificador para a API e o devolve no cabeçalho da resposta. Um
-registro JSON correlaciona método/rota da requisição com status/duração da
-resposta. Senhas, cookies, tokens e query strings não são registrados. Para
+API, web e gateway gravam metadados técnicos em arquivos JSONL separados:
+`api/logs.jsonl`, `web/logs.jsonl` e `gateway/logs.jsonl`. O gateway gera um
+`X-Request-ID` por requisição e o propaga à API. Os registros incluem método,
+rota, status e duração; não incluem corpo, senha, cookie, token ou query string.
+Os registros da web passam pelo gateway e são autenticados entre gateway e API;
+nenhuma credencial de Blob é enviada ao navegador. Para
 diagnóstico do chat, o gateway e o backend também imprimem o evento JSON
 `chat_exchange` com a pergunta e a resposta (`answer` e linhas de
 `sqlResult`), correlacionados pelo mesmo `traceId`. Esses eventos são enviados
@@ -110,26 +112,16 @@ ao console/fluxo de logs dos serviços, não adicionados ao registro de auditori
 Blob. Como podem conter dados comerciais, restrinja o acesso aos logs.
 Respostas 4xx são warnings; respostas 5xx são errors.
 
-Para persistir esses registros no Blob privado existente, configure o mesmo
-valor aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY` no `.env` da raiz
-usado pelo Docker Compose (ou forneça as duas variáveis ao iniciar os serviços
-diretamente), configure conta/container de Storage e defina
-`LEITESOL_API_GATEWAY_LOG_TO_BLOB=true`. Ao executar o gateway diretamente
-com Node, ele carrega o `.env` da raiz; o endereço local padrão da API é
-`http://localhost:5000` (`BACKEND_URL`). No Docker Compose, o gateway usa o
-endereço interno `http://api:5000`. Todos os níveis e, quando
-`LEITESOL_API_USAGE_LOG_TO_BLOB=true`, os registros de consumo da LLM são
-anexados ao mesmo append blob `gateway/logs.jsonl`; cada linha JSONL identifica
-severidade e tipo do evento, sem criar blobs por data ou categoria. O blob é
-criado na primeira gravação se ainda não existir. Sem a gravação no Blob, os
-logs estruturados continuam no console/fluxo de logs do gateway e da API. Falhas de
-persistência são registradas no terminal e não interrompem as requisições. Para
-diagnóstico, procure os eventos `gateway_log_forward` no gateway e
-`gateway_log_blob_write` na API, usando `traceId`/`trace_id` para correlacioná-los.
-Os eventos mostram se o encaminhamento foi ignorado, falhou ou chegou à API e
-se a gravação no Blob foi concluída; falhas incluem tipo/código HTTP do Azure e
-request ID quando disponíveis, sem imprimir o conteúdo bruto da resposta nem
-credenciais.
+Para persistir os logs técnicos no Blob privado, configure o mesmo valor
+aleatório em `LEITESOL_API_API_KEY` e `BACKEND_API_KEY`, configure Storage e
+ative `LEITESOL_API_API_LOG_TO_BLOB`, `LEITESOL_API_WEB_LOG_TO_BLOB` e
+`LEITESOL_API_GATEWAY_LOG_TO_BLOB`. Cada arquivo é criado na primeira gravação.
+O consumo da LLM, quando `LEITESOL_API_USAGE_LOG_TO_BLOB=true`, fica em
+`api/usage.jsonl`. Sem as flags de Blob, os logs continuam no console. Falhas
+de persistência são registradas no terminal e não interrompem as requisições.
+Procure `service_log_blob_write` para API/web, `gateway_log_blob_write` para
+gateway e `llm_usage` para consumo; os eventos informam se a gravação foi
+desativada, falhou ou foi concluída, sem registrar conteúdo bruto de erros.
 
 Tokens de acesso duram no máximo 20 minutos. A API valida expiração e idade
 máxima do token nas rotas protegidas; o gateway mantém o access token em cookie

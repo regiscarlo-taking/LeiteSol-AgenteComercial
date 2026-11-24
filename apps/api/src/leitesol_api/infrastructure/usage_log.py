@@ -64,7 +64,7 @@ def record_usage(
             from leitesol_api.infrastructure.azure_storage import get_blob_storage_gateway
 
             store = get_blob_storage_gateway()
-        store.append_line("gateway/logs.jsonl", line)
+        store.append_line("api/usage.jsonl", line)
     except Exception:
         logger.warning(
             "Usage record failed correlation_id=%s", response.correlation_id, exc_info=True

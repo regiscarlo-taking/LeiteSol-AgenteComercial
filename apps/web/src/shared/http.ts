@@ -39,6 +39,54 @@ const createTraceId = (): string => {
   return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const sendWebLog = (
+  traceId: string,
+  method: HttpMethod,
+  path: string,
+  statusCode: number,
+  durationMs: number,
+): void => {
+  const severity =
+    statusCode >= 500 ? "error" : statusCode >= 400 ? "warning" : "info";
+  void fetch("/api/client-logs", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      traceId,
+      timestamp: new Date().toISOString(),
+      severity,
+      request: { method, path },
+      response: { statusCode, durationMs: Number(durationMs.toFixed(2)) },
+    }),
+  }).catch((error: unknown) => {
+    console.warn("Não foi possível enviar o log técnico da web.", error);
+  });
+};
+
+export const fetchWithWebLogging = async (
+  url: string,
+  init: RequestInit,
+  traceId = createTraceId(),
+): Promise<Response> => {
+  const method = (init.method ?? "GET").toUpperCase() as HttpMethod;
+  const path = new URL(url, window.location.origin).pathname;
+  const startedAt = performance.now();
+
+  try {
+    const response = await fetch(url, init);
+    if (path !== "/api/client-logs") {
+      sendWebLog(traceId, method, path, response.status, performance.now() - startedAt);
+    }
+    return response;
+  } catch (error) {
+    if (path !== "/api/client-logs") {
+      sendWebLog(traceId, method, path, 503, performance.now() - startedAt);
+    }
+    throw error;
+  }
+};
+
 export const createBaseRequest = <
   TData = unknown,
   TMetadata = RequestMetadata,
@@ -116,7 +164,7 @@ export const requestApi = async <
       metadata,
     });
 
-    const response = await fetch(url, {
+    const response = await fetchWithWebLogging(url, {
       method,
       credentials: "include",
       headers: {

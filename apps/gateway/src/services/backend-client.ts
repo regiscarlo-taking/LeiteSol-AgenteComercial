@@ -201,6 +201,28 @@ export const persistGatewayLog = async (
   return "forwarded";
 };
 
+export const persistWebLog = async (
+  record: GatewayLogRecord,
+): Promise<void> => {
+  if (!env.backendApiKey) {
+    throw new BackendRequestError("Web log forwarding is not configured.", 503);
+  }
+
+  const response = await requestBackend(`${env.backendUrl}/internal/web-logs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.backendApiKey,
+      "x-request-id": record.traceId,
+    },
+    body: JSON.stringify(record),
+  });
+
+  if (!response.ok) {
+    throw new BackendRequestError(`Web log ingestion failed: ${response.status}`, response.status);
+  }
+};
+
 export const fetchBackendHealth = async (
   traceId: string,
   authorization?: string,

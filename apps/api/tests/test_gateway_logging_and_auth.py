@@ -8,10 +8,13 @@ import httpx
 import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from leitesol_api import main
 from leitesol_api.infrastructure import auth
 from leitesol_api.infrastructure.gateway_log import record_gateway_request
+from leitesol_api.infrastructure.service_log import record_service_request
 from leitesol_api.infrastructure.settings import Settings
+from leitesol_api.interfaces.http.middlewares import logging as api_logging
 from leitesol_api.interfaces.http.routes import gateway_logs
 from leitesol_api.interfaces.schemas import GatewayLogRecord
 
@@ -51,6 +54,18 @@ def test_gateway_log_writes_all_severities_to_one_blob() -> None:
         "error",
     ]
     assert all("body" not in line for _, line in store.lines)
+
+
+def test_api_and_web_request_logs_use_separate_blobs() -> None:
+    store = FakeStore()
+    record = gateway_log()
+    settings = Settings(api_log_to_blob=True, web_log_to_blob=True)
+
+    record_service_request("api", record, settings, store)
+    record_service_request("web", record, settings, store)
+
+    assert [name for name, _ in store.lines] == ["api/logs.jsonl", "web/logs.jsonl"]
+    assert [json.loads(line)["service"] for _, line in store.lines] == ["api", "web"]
 
 
 def test_gateway_blob_write_logs_success_with_trace_and_blob_name(caplog) -> None:
@@ -155,6 +170,30 @@ def test_gateway_log_ingestion_requires_shared_api_key(monkeypatch) -> None:
     with pytest.raises(HTTPException) as error:
         gateway_logs.ingest_gateway_log(record, "incorrect")
     assert error.value.status_code == 401
+
+
+def test_web_log_ingestion_uses_shared_key_and_web_blob(monkeypatch) -> None:
+    settings = Settings(api_key="shared-test-key", web_log_to_blob=True)
+    monkeypatch.setattr(gateway_logs, "get_settings", lambda: settings)
+    accepted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        gateway_logs,
+        "record_service_request",
+        lambda service, record, current_settings: accepted.append(
+            (service, record.trace_id)
+        ),
+    )
+    monkeypatch.setattr(api_logging, "get_settings", lambda: Settings(api_log_to_blob=False))
+    record = gateway_log()
+
+    response = TestClient(main.app).post(
+        "/internal/web-logs",
+        json=record.model_dump(mode="json", by_alias=True),
+        headers={"x-api-key": "shared-test-key"},
+    )
+
+    assert response.status_code == 202
+    assert accepted == [("web", record.trace_id)]
 
 
 def test_local_access_token_expires_after_twenty_minutes(monkeypatch) -> None:

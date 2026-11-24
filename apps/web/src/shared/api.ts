@@ -15,7 +15,7 @@ import type {
   SendChatMessageResult,
 } from "@leitesol/contracts";
 
-import { requestApi } from "./http";
+import { fetchWithWebLogging, requestApi } from "./http";
 
 export interface AuthSession {
   authenticated: boolean;
@@ -34,7 +34,7 @@ export const authenticate = async (
   username: string,
   password: string,
 ): Promise<AuthSession> => {
-  const response = await fetch("/api/auth/login", {
+  const response = await fetchWithWebLogging("/api/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -54,7 +54,7 @@ export const authenticate = async (
 };
 
 export const getAuthSession = async (): Promise<AuthSession> => {
-  const response = await fetch("/api/auth/session", {
+  const response = await fetchWithWebLogging("/api/auth/session", {
     method: "GET",
     credentials: "include",
   });
@@ -67,7 +67,7 @@ export const getAuthSession = async (): Promise<AuthSession> => {
 };
 
 export const logout = async (): Promise<void> => {
-  const response = await fetch("/api/auth/logout", {
+  const response = await fetchWithWebLogging("/api/auth/logout", {
     method: "POST",
     credentials: "include",
   });

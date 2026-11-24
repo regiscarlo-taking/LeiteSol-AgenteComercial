@@ -12,6 +12,7 @@ import { chatsRouter } from "./routes/chats.js";
 import { authRouter } from "./routes/auth.js";
 import { fabricRouter } from "./routes/fabric.js";
 import { healthRouter } from "./routes/health.js";
+import { webLogsRouter } from "./routes/web-logs.js";
 import { createBaseResponse } from "./shared/contracts.js";
 import { BackendRequestError } from "./services/backend-client.js";
 
@@ -48,6 +49,7 @@ export const createApp = () => {
   app.use(express.json());
 
   app.use("/api", authRouter);
+  app.use("/api", webLogsRouter);
   app.use("/api", requireSessionCookie);
   app.use("/api", healthRouter);
   app.use("/api", chatsRouter);

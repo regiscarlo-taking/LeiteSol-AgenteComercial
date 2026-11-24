@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # Registro de consumo da LLM por pergunta (tokens, sem conteúdo). Vai sempre
     # para o log da aplicação; para o Blob, só com o container privado.
     usage_log_to_blob: bool = False
+    api_log_to_blob: bool = False
+    web_log_to_blob: bool = False
     gateway_log_to_blob: bool = False
     # Histórico de conversas no schema IA_APP do Warehouse (17_historico_conversa.sql).
     # Desligado até as tabelas existirem e a retenção estar definida.

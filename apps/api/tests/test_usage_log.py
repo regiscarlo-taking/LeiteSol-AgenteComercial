@@ -64,13 +64,13 @@ def test_blob_is_off_by_default() -> None:
     assert store.lines == []
 
 
-def test_blob_gets_one_line_per_question_in_the_shared_log_blob() -> None:
+def test_blob_gets_one_line_per_question_in_the_api_usage_blob() -> None:
     store = FakeStore()
 
     record_usage(response(LlmUsage("gemini-x", 1, 10, 5)), Settings(usage_log_to_blob=True), store)
 
     [(name, line)] = store.lines
-    assert name == "gateway/logs.jsonl"
+    assert name == "api/usage.jsonl"
     assert json.loads(line)["event_type"] == "llm_usage"
     assert "custo_estimado" not in json.loads(line)
     assert "leitesol.com.br" not in line
