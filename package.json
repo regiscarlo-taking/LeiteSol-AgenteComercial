@@ -16,6 +16,7 @@
     "dev:contracts": "npm run dev --workspace @leitesol/contracts",
     "dev:web": "npm run dev --workspace @leitesol/web",
     "dev:gateway": "npm run dev --workspace @leitesol/gateway",
+    "check:blob": "uv run --package leitesol-api python scripts/check_blob_storage.py",
     "lint": "turbo run lint",
     "lint:py": "uv run ruff check apps/api/src apps/agent/src apps/api/tests apps/agent/tests",
     "postinstall": "npm run build --workspace @leitesol/contracts",

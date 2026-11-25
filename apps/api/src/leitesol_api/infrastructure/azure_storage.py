@@ -67,6 +67,10 @@ class BlobStorageGateway:
             return f"{self._blob_prefix}/{normalized_name}"
         return normalized_name
 
+    def check_connection(self) -> None:
+        """Verify access to the configured container without changing its contents."""
+        self._container.get_container_properties()
+
     def upload(self, name: str, content: BinaryIO | bytes, *, overwrite: bool = False) -> str:
         blob_name = self._blob_name(name)
         self._container.upload_blob(name=blob_name, data=content, overwrite=overwrite)
